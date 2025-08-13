@@ -7,20 +7,14 @@
 - 4つの感情パラメータ（joy, fun, anger, sad）を管理
 - 触覚の強さ（0〜1）に応じた感情の変化
 - JSON形式での入出力
-- 性別設定に対応
 
 ## 使い方
 
 ### 基本的な実行
 
 ```bash
-python chatbot.py
-```
-
-### テストの実行
-
-```bash
-python test_chatbot.py
+source venv/bin/activate
+adk run .
 ```
 
 ## 入力形式
@@ -29,7 +23,6 @@ python test_chatbot.py
 {
   "data": 0.5,
   "touched_area": "頭",
-  "gender": "女性"
 }
 ```
 
@@ -38,7 +31,6 @@ python test_chatbot.py
   - 0.5付近: 最も心地良い
   - 1に近い: 痛みを感じる
 - `touched_area`: 触れられた部位
-- `gender`: 性別設定（オプション）
 
 ## 出力形式
 
@@ -56,6 +48,4 @@ python test_chatbot.py
 
 ## ファイル構成
 
-- `chatbot.py`: メインのチャットボット実装
-- `test_chatbot.py`: テストスクリプト
-- `prompt/system_prompt`: 元のシステムプロンプト
+- `agent.py`: メインのチャットボット実装
