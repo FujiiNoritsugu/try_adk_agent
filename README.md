@@ -49,3 +49,10 @@ adk run .
 ## ファイル構成
 
 - `agent.py`: メインのチャットボット実装
+
+## ログファイルの確認
+
+  ADKの実行時に表示されたログパスを確認できます：
+  tail -F /tmp/agents_log/agent.latest.log
+
+  このログファイルにsub_agentの呼び出しやレスポンスが記録されます。

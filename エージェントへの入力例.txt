@@ -1,0 +1,3 @@
+{{"data": 0.5, "touched_area": "胸", "gender": "男性"}}
+{{"data": 0.5, "touched_area": "胸"}}
+{{"data": 0.7, "touched_area": "胸"}}
