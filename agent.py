@@ -6,9 +6,9 @@ load_dotenv()
 with open("prompt/system_prompt", "r", encoding="utf-8") as f:
     system_prompt = f.read()
 
-agent = Agent(
+root_agent = Agent(
     name="emotion_agent",
-    model="gemini-2.0-flash",
+    model="gemini-1.5-flash",
     description="An agent that detects and responds to emotions in text.",
     instruction=system_prompt,
 )
