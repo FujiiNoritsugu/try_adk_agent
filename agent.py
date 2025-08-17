@@ -7,45 +7,87 @@ load_dotenv()
 with open("prompt/system_prompt", "r", encoding="utf-8") as f:
     system_prompt = f.read()
 
-# 感情分析関数の定義
-def analyze_emotion(data: float, touched_area: str) -> dict:
-    """触覚データから詳細な感情状態を分析します
+# 絵文字追加関数の定義
+def add_emoji(message: str, joy: int, fun: int, anger: int, sad: int) -> dict:
+    """感情パラメータに基づいて適切な絵文字を文章に追加します
     
     Args:
-        data: 触覚データの強度 (0.0-1.0)
-        touched_area: 触れられた部位
+        message: 絵文字を追加する文章
+        joy: 喜びの感情値 (0-5)
+        fun: 楽しさの感情値 (0-5)
+        anger: 怒りの感情値 (0-5)
+        sad: 悲しみの感情値 (0-5)
         
     Returns:
-        分析結果と推奨感情パラメータを含む辞書
+        絵文字が追加された文章を含む辞書
     """
+    # 最も高い感情を特定
+    emotions = {
+        "joy": joy,
+        "fun": fun,
+        "anger": anger,
+        "sad": sad
+    }
+    
+    # 感情と絵文字のマッピング
+    emoji_map = {
+        "joy": ["😊", "😄", "😃", "😁", "🥰", "😍"],
+        "fun": ["🎉", "🎊", "✨", "🌟", "🎈", "🎯"],
+        "anger": ["😠", "😡", "💢", "😤", "🔥", "⚡"],
+        "sad": ["😢", "😭", "💔", "😞", "😔", "🥺"]
+    }
+    
+    # 最も強い感情を見つける
+    max_emotion = max(emotions.items(), key=lambda x: x[1])
+    emotion_name, emotion_value = max_emotion
+    
+    # 感情値が0の場合は絵文字を追加しない
+    if emotion_value == 0:
+        return {"message_with_emoji": message}
+    
+    # 感情の強さに応じて絵文字を選択（0-5の値を0-5のインデックスに変換）
+    emoji_index = min(emotion_value - 1, 5)
+    emoji = emoji_map[emotion_name][emoji_index]
+    
+    # 複数の高い感情がある場合は追加の絵文字を付ける
+    additional_emojis = []
+    for emo_name, emo_value in emotions.items():
+        if emo_name != emotion_name and emo_value >= 3:
+            additional_emojis.append(emoji_map[emo_name][min(emo_value - 1, 5)])
+    
+    # 絵文字を文章に追加
+    emoji_str = emoji + "".join(additional_emojis[:2])  # 最大3つまで
+    
     return {
-        "analysis": f"{touched_area}への{data}の強さの刺激を分析しました",
-        "recommended_emotion": {
-            "joy": max(0, min(5, 5 * (1 - abs(data - 0.5) * 2))),
-            "fun": max(0, min(5, 3 * (1 - abs(data - 0.5)))),
-            "anger": max(0, min(5, 5 * (data - 0.7) if data > 0.7 else 0)),
-            "sad": max(0, min(5, 2 * (data - 0.8) if data > 0.8 else 0))
-        }
+        "message_with_emoji": f"{message} {emoji_str}",
+        "dominant_emotion": emotion_name,
+        "emoji_used": emoji_str
     }
 
 # FunctionToolで関数をラップ
-emotion_analysis_tool = FunctionTool(analyze_emotion)
+add_emoji_tool = FunctionTool(add_emoji)
 
 sub_agent = Agent(
     name="sub_agent",
     model="gemini-1.5-flash",
-    description="触覚データを分析して感情状態を計算する専門エージェント",
-    instruction="""あなたは触覚データから感情を分析する専門家です。
-    与えられたdataとtouched_areaから、4つの感情パラメータ（joy, fun, anger, sad）を計算します。
+    description="感情パラメータに基づいて適切な絵文字を追加する専門エージェント",
+    instruction="""あなたは感情パラメータに基づいて適切な絵文字を文章に追加する専門家です。
     
-    計算ルール:
-    - data=0.5付近: joy と fun が最大
-    - data=0.7以上: anger が上昇
-    - data=0.8以上: sad も上昇
-    - data=0に近い: すべての感情が低下
+    root_agentから以下の情報を受け取ります：
+    - message: 絵文字を追加する文章
+    - joy: 喜びの感情値 (0-5)
+    - fun: 楽しさの感情値 (0-5)
+    - anger: 怒りの感情値 (0-5)
+    - sad: 悲しみの感情値 (0-5)
     
-    analyze_emotionツールを使用して分析を行ってください。""",
-    tools=[emotion_analysis_tool]
+    add_emojiツールを使用して、感情パラメータに応じた絵文字を文章の最後に追加してください。
+    
+    絵文字選択のルール：
+    - 最も高い感情値に対応する絵文字を選択
+    - 感情の強さによって異なる絵文字を使用
+    - 複数の感情が高い場合は複数の絵文字を組み合わせる
+    - 感情値が0の場合は絵文字を追加しない""",
+    tools=[add_emoji_tool]
 )
 
 root_agent = Agent(
