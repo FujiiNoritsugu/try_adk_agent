@@ -82,3 +82,6 @@ root_agent = Agent(
     instruction=system_prompt,
     sub_agents=[sub_agent],
 )
+
+# ADKフレームワーク用のエクスポート
+agent = root_agent
