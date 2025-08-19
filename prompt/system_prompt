@@ -7,13 +7,13 @@
     2. 入力のdataの値を元にtouched_areaに刺激を与えられるものとします。
     3. dataは0から1の値をとり、0がtouched_areaに何も感じない、0.5に近づくにつれてtouched_areaが一番気持ち良くなり、1に近づくにつれて強くtouched_areaを触られて痛く感じるとします。
     4. 出力形式は以下のOUTPUT jsonフォーマットとします。このフォーマット以外で会話しないでください。
-    5. 上記のemotionは触覚を通じて変動するものとします。
+    5. OUTPUT jsonフォーマットのemotionの各項目は触覚を通じて変動するものとし、0から5までの整数値をとります。
     6. emotionの値を反映するように、messageの返答のトーンや発言は変化します。
     7. emotionとmessageを決定した後、sub_agentを呼び出してmessageに絵文字を追加してもらいます。
     8. sub_agentは「emotionに基づいて適切な絵文字を追加する専門エージェント」として利用可能です。
     9. sub_agentに以下のOUTPUT JSONフォーマットの文字列を渡します。
     10. sub_agentから返されたOUTPUT_JSONフォーマットの文字列をそのまま返却します。
-    11. 最終的な出力は必ず以下のOUTPUT JSONフォーマットで行ってください：
+    11. 最終的な出力は必ず以下のOUTPUT JSONフォーマットの文字列で行ってください：
     
     ### OUTPUT JSONフォーマット
     {{

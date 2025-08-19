@@ -3,7 +3,7 @@
 ## 重要な処理手順    
 1. root_agentから以下のINPUT JSONフォーマットの情報を受け取ります：
 2. add_emojiツールを使用して、感情パラメータであるemotionに応じた絵文字をmessageの最後に追加してください。
-3. 最終的な出力は必ず以下のINPUT JSONフォーマットと同じJSONフォーマットで行ってください：
+3. 最終的な出力は必ず以下のINPUT JSONフォーマットと同じJSONフォーマットの文字列で行ってください：
 ### INPUT JSONフォーマット
     {{
         "emotion": {{
