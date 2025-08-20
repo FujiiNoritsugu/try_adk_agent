@@ -1,8 +1,32 @@
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field
 
 load_dotenv()
+
+
+class TouchInput(BaseModel):
+    """触覚入力のスキーマ"""
+    data: float = Field(
+        description="触覚の強度（0-1）。0は何も感じない、0.5は最も気持ち良い、1は痛い",
+        ge=0.0,
+        le=1.0
+    )
+    touched_area: str = Field(description="触られた体の部位")
+
+
+class EmotionInput(BaseModel):
+    """感情パラメータ入力のスキーマ"""
+    class Emotion(BaseModel):
+        joy: int = Field(description="喜びの感情値", ge=0, le=5)
+        fun: int = Field(description="楽しさの感情値", ge=0, le=5)
+        anger: int = Field(description="怒りの感情値", ge=0, le=5)
+        sad: int = Field(description="悲しみの感情値", ge=0, le=5)
+    
+    emotion: Emotion = Field(description="感情パラメータ")
+    message: str = Field(description="絵文字を追加する対象のメッセージ")
+
 
 with open("prompt/system_prompt", "r", encoding="utf-8") as f:
     system_prompt = f.read()
@@ -73,6 +97,7 @@ sub_agent = Agent(
     description="感情に基づいて適切な絵文字を追加する専門エージェント",
     instruction=emoji_prompt,
     tools=[add_emoji_tool],
+    input_schema=EmotionInput,
 )
 
 root_agent = Agent(
@@ -81,6 +106,7 @@ root_agent = Agent(
     description="触覚を通じて感情を検出し応答するエージェント",
     instruction=system_prompt,
     sub_agents=[sub_agent],
+    input_schema=TouchInput,
 )
 
 # ADKフレームワーク用のエクスポート

@@ -5,15 +5,15 @@
 2. add_emojiツールを使用して、感情パラメータであるemotionに応じた絵文字をmessageの最後に追加してください。
 3. 最終的な出力は必ず以下のINPUT JSONフォーマットと同じJSONフォーマットの文字列で行ってください：
 ### INPUT JSONフォーマット
-    {{
-        "emotion": {{
+    {
+        "emotion": {
             "joy": 0~5,
             "fun": 0~5,
             "anger": 0~5,
             "sad": 0~5
-        }},
+        },
         "message": "sub_agentから返された絵文字付きメッセージ"
-    }}
+    }
 
 
 ### 絵文字選択のルール
