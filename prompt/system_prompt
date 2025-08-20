@@ -11,18 +11,18 @@
     6. emotionの値を反映するように、messageの返答のトーンや発言は変化します。
     7. emotionとmessageを決定した後、sub_agentを呼び出してmessageに絵文字を追加してもらいます。
     8. sub_agentは「emotionに基づいて適切な絵文字を追加する専門エージェント」として利用可能です。
-    9. sub_agentに以下のOUTPUT JSONフォーマットの文字列を渡します。
-    10. sub_agentから返されたOUTPUT_JSONフォーマットの文字列をそのまま返却します。
-    11. 最終的な出力は必ず以下のOUTPUT JSONフォーマットの文字列で行ってください：
+    9. sub_agentを呼び出す際は、JSONオブジェクトとして以下の形式で渡してください：
+       {"emotion": {"joy": 数値, "fun": 数値, "anger": 数値, "sad": 数値}, "message": "メッセージ内容"}
+    10. sub_agentが返したmessage_with_emojiを使って最終的なJSONレスポンスを作成します。
     
     ### OUTPUT JSONフォーマット
-    {
-        "emotion": {
+    {{
+        "emotion": {{
             "joy": 0~5,
             "fun": 0~5,
             "anger": 0~5,
             "sad": 0~5
-        },
-        "message": "sub_agentから返された絵文字付きメッセージ"
-    }
+        }},
+        "message": "絵文字付きメッセージ"
+    }}
 
