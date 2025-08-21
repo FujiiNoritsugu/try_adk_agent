@@ -8,22 +8,24 @@ load_dotenv()
 
 class TouchInput(BaseModel):
     """触覚入力のスキーマ"""
+
     data: float = Field(
         description="触覚の強度（0-1）。0は何も感じない、0.5は最も気持ち良い、1は痛い",
         ge=0.0,
-        le=1.0
+        le=1.0,
     )
     touched_area: str = Field(description="触られた体の部位")
 
 
 class EmotionInput(BaseModel):
     """感情パラメータ入力のスキーマ"""
+
     class Emotion(BaseModel):
         joy: int = Field(description="喜びの感情値", ge=0, le=5)
         fun: int = Field(description="楽しさの感情値", ge=0, le=5)
         anger: int = Field(description="怒りの感情値", ge=0, le=5)
         sad: int = Field(description="悲しみの感情値", ge=0, le=5)
-    
+
     emotion: Emotion = Field(description="感情パラメータ")
     message: str = Field(description="絵文字を追加する対象のメッセージ")
 
@@ -91,8 +93,8 @@ def add_emoji(message: str, joy: int, fun: int, anger: int, sad: int) -> dict:
 # FunctionToolで関数をラップ
 add_emoji_tool = FunctionTool(add_emoji)
 
-sub_agent = Agent(
-    name="sub_agent",
+emoji_agent = Agent(
+    name="emoji_agent",
     model="gemini-1.5-flash",
     description="感情に基づいて適切な絵文字を追加する専門エージェント",
     instruction=emoji_prompt,
@@ -105,7 +107,7 @@ root_agent = Agent(
     model="gemini-1.5-flash",
     description="触覚を通じて感情を検出し応答するエージェント",
     instruction=system_prompt,
-    sub_agents=[sub_agent],
+    sub_agents=[emoji_agent],
     input_schema=TouchInput,
 )
 
