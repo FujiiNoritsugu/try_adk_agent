@@ -93,13 +93,12 @@ def add_emoji(message: str, joy: int, fun: int, anger: int, sad: int) -> dict:
 # FunctionToolで関数をラップ
 add_emoji_tool = FunctionTool(add_emoji)
 
-emoji_agent = Agent(
-    name="emoji_agent",
+sub_agent = Agent(
+    name="sub_agent",
     model="gemini-1.5-flash",
     description="感情に基づいて適切な絵文字を追加する専門エージェント",
     instruction=emoji_prompt,
     tools=[add_emoji_tool],
-    input_schema=EmotionInput,
 )
 
 root_agent = Agent(
@@ -107,7 +106,7 @@ root_agent = Agent(
     model="gemini-1.5-flash",
     description="触覚を通じて感情を検出し応答するエージェント",
     instruction=system_prompt,
-    sub_agents=[emoji_agent],
+    sub_agents=[sub_agent],
     input_schema=TouchInput,
 )
 
