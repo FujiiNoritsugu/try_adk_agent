@@ -59,14 +59,6 @@ vibration_toolset = MCPToolset(
 )
 
 # エージェントの定義
-emoji_agent = Agent(
-    name="emoji_agent",
-    model="gemini-1.5-flash",
-    description="感情に基づいて適切な絵文字を提案する専門エージェント",
-    instruction=emoji_prompt,
-    tools=[emoji_toolset],
-)
-
 vibration_agent = Agent(
     name="vibration_agent",
     model="gemini-1.5-flash",
@@ -80,7 +72,8 @@ root_agent = Agent(
     model="gemini-1.5-flash",
     description="触覚を通じて感情を検出し応答するエージェント",
     instruction=system_prompt,
-    sub_agents=[emoji_agent, vibration_agent],
+    tools=[emoji_toolset],  # emoji_toolsetを直接使用
+    sub_agents=[vibration_agent],
     input_schema=TouchInput,
 )
 
