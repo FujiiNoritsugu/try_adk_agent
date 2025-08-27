@@ -4,8 +4,8 @@
 import asyncio
 import json
 from typing import Any, Dict, List, Optional
-from mcp import Server, Tool, server
-from mcp.types import TextContent
+from mcp.server import Server
+from mcp.types import TextContent, Tool
 from pydantic import BaseModel, Field
 
 
@@ -25,7 +25,6 @@ class ControlVibrationArgs(BaseModel):
 app = Server("vibration-server")
 
 
-@server.tool()
 async def generate_vibration_pattern(arguments: GenerateVibrationArgs) -> List[TextContent]:
     """感情パラメータに基づいて振動パターンを生成します"""
     
@@ -126,7 +125,6 @@ async def generate_vibration_pattern(arguments: GenerateVibrationArgs) -> List[T
     return [TextContent(type="text", text=json.dumps(result))]
 
 
-@server.tool()
 async def control_vibration(arguments: ControlVibrationArgs) -> List[TextContent]:
     """振動設定に基づいて実際の振動制御コマンドを生成します"""
     

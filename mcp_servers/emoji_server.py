@@ -4,8 +4,8 @@
 import asyncio
 import json
 from typing import Any, Dict, List, Optional
-from mcp import Server, Tool, server
-from mcp.types import TextContent
+from mcp.server import Server
+from mcp.types import TextContent, Tool
 from pydantic import BaseModel, Field
 
 
@@ -20,7 +20,6 @@ class AddEmojiArgs(BaseModel):
 app = Server("emoji-server")
 
 
-@server.tool()
 async def add_emoji(arguments: AddEmojiArgs) -> List[TextContent]:
     """感情パラメータに基づいて適切な絵文字を返却します"""
     

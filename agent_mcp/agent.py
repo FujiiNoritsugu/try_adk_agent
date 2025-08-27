@@ -1,5 +1,6 @@
 from google.adk.agents import Agent
-from google.adk.tools.mcp_tool import MCPToolset, StdioConnectionParams, StdioServerParameters
+from google.adk.tools.mcp_tool import MCPToolset, StdioConnectionParams
+from google.adk.tools.mcp_tool.mcp_session_manager import StdioServerParameters
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
