@@ -55,15 +55,15 @@ emoji_toolset = MCPToolset(
 
 vibration_toolset = MCPToolset(
     connection_params=vibration_mcp_params,
-    tool_filter=['generate_vibration_pattern', 'control_vibration'],
+    tool_filter=['generate_vibration_pattern', 'control_vibration', 'send_arduino_vibration', 'initialize_arduino'],
 )
 
 # エージェントの定義
 vibration_agent = Agent(
     name="vibration_agent",
     model="gemini-1.5-flash",
-    description="感情に基づいて振動パターンを制御する専門エージェント",
-    instruction=vibration_prompt,
+    description="感情に基づいてArduino振動センサーを制御する専門エージェント",
+    instruction=vibration_prompt + "\n\nArduinoへの振動パターン送信には send_arduino_vibration または control_vibration ツールを使用してください。初回使用時は initialize_arduino で初期化を行ってください。",
     tools=[vibration_toolset],
 )
 
