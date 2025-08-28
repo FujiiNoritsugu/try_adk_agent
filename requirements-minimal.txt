@@ -1,0 +1,2 @@
+# Minimal requirements for Arduino vibration control
+pyserial>=3.5

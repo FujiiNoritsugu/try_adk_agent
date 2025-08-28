@@ -1,0 +1,3 @@
+# Full requirements including WebSocket features
+pyserial>=3.5
+websockets>=11.0

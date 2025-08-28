@@ -1,2 +1,5 @@
+# 基本的なArduino制御に必要
 pyserial>=3.5
-websockets>=11.0
+
+# WebSocket機能が必要な場合のみ（オプション）
+# websockets>=11.0
