@@ -55,7 +55,7 @@ emoji_toolset = MCPToolset(
 
 vibration_toolset = MCPToolset(
     connection_params=vibration_mcp_params,
-    tool_filter=['generate_vibration_pattern', 'control_vibration'],
+    tool_filter=['generate_vibration_pattern', 'control_vibration', 'initialize_arduino', 'send_arduino_vibration'],
 )
 
 # エージェントの定義
