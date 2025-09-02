@@ -18,7 +18,7 @@
 
 ### 3-1. Arduino初期化（セッションで初回のみ）
 ```
-initialize_arduino({
+initialize_arduino_direct({
   "host": "192.168.43.166",
   "port": 80
 })
@@ -27,7 +27,7 @@ initialize_arduino({
 ### 3-2. 振動パターン生成（必須）
 決定した感情値を使用して：
 ```
-generate_vibration_pattern({
+generate_vibration_pattern_direct({
   "joy": [決定したjoy値],
   "fun": [決定したfun値],
   "anger": [決定したanger値],
@@ -35,11 +35,11 @@ generate_vibration_pattern({
 })
 ```
 
-### 3-3. 振動制御（必須）
-generate_vibration_patternの結果を使用して：
+### 3-3. 振動送信（必須）
+generate_vibration_pattern_directの結果のpatternフィールドを使用して：
 ```
-control_vibration({
-  "vibration_settings": [generate_vibration_patternの結果]
+send_vibration_direct({
+  "pattern_dict": [生成されたpattern]
 })
 ```
 
@@ -50,6 +50,6 @@ control_vibration({
 触られた感覚を女性として感情豊かに日本語で表現する
 
 重要な注意事項：
-- 振動ツール（initialize_arduino、generate_vibration_pattern、control_vibration）は必ず使用すること
-- 感情値が全て0でも、generate_vibration_patternとcontrol_vibrationは実行すること
+- 振動ツール（initialize_arduino_direct、generate_vibration_pattern_direct、send_vibration_direct）は必ず使用すること
+- 感情値が全て0でも、generate_vibration_pattern_directは実行すること（振動なしという結果が返る）
 - ツール呼び出しは純粋なJSON形式で行うこと

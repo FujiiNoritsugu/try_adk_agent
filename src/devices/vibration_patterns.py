@@ -54,11 +54,11 @@ class EmotionVibrationPatterns:
         """Light, rhythmic pattern for joy"""
         return VibrationPattern(
             steps=[
-                VibrationStep(0.3, 100),
+                VibrationStep(0.6, 100),
                 VibrationStep(0.0, 50),
-                VibrationStep(0.5, 150),
+                VibrationStep(0.8, 150),
                 VibrationStep(0.0, 50),
-                VibrationStep(0.3, 100),
+                VibrationStep(0.6, 100),
             ],
             interval=50,
             repeat_count=2
@@ -84,9 +84,9 @@ class EmotionVibrationPatterns:
         """Slow, gentle pattern for sorrow"""
         return VibrationPattern(
             steps=[
-                VibrationStep(0.2, 500),
-                VibrationStep(0.1, 300),
-                VibrationStep(0.0, 200),
+                VibrationStep(0.8, 500),
+                VibrationStep(0.6, 300),
+                VibrationStep(0.4, 200),
             ],
             interval=100,
             repeat_count=2
@@ -97,10 +97,10 @@ class EmotionVibrationPatterns:
         """Smooth, moderate pattern for pleasure"""
         return VibrationPattern(
             steps=[
-                VibrationStep(0.4, 300),
-                VibrationStep(0.6, 400),
-                VibrationStep(0.5, 300),
-                VibrationStep(0.3, 200),
+                VibrationStep(0.6, 300),
+                VibrationStep(0.8, 400),
+                VibrationStep(0.7, 300),
+                VibrationStep(0.5, 200),
             ],
             interval=50,
             repeat_count=1

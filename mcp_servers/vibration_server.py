@@ -53,37 +53,13 @@ arduino_controller: Optional[ArduinoController] = None
 async def generate_vibration_pattern(arguments: GenerateVibrationArgs) -> List[TextContent]:
     """感情パラメータに基づいて振動パターンを生成します"""
     
-    # 基本振動パターンの定義
-    vibration_patterns = {
-        "joy": {
-            "pattern": "pulse",
-            "intensity_base": 0.6,
-            "frequency_base": 2.0,  # Hz
-            "duration_base": 0.5,  # seconds
-            "description": "軽快でリズミカルな振動",
-        },
-        "fun": {
-            "pattern": "wave",
-            "intensity_base": 0.7,
-            "frequency_base": 3.0,
-            "duration_base": 0.3,
-            "description": "楽しい波打つような振動",
-        },
-        "anger": {
-            "pattern": "burst",
-            "intensity_base": 0.9,
-            "frequency_base": 5.0,
-            "duration_base": 0.2,
-            "description": "強く断続的な振動",
-        },
-        "sad": {
-            "pattern": "fade",
-            "intensity_base": 0.4,
-            "frequency_base": 1.0,
-            "duration_base": 1.0,
-            "description": "ゆっくりとした弱い振動",
-        },
-    }
+    # VibrationPatternGeneratorを使用してパターンを生成
+    pattern = VibrationPatternGenerator.from_emotion_values(
+        joy=arguments.joy,
+        fun=arguments.fun,
+        anger=arguments.anger,
+        sad=arguments.sad
+    )
     
     # 感情値の辞書
     emotions = {
@@ -98,7 +74,7 @@ async def generate_vibration_pattern(arguments: GenerateVibrationArgs) -> List[T
     dominant_emotion, emotion_value = max_emotion
     
     # 感情値が0の場合は振動なし
-    if emotion_value == 0:
+    if emotion_value == 0 or not pattern.steps:
         result = {
             "vibration_enabled": False,
             "pattern": "none",
@@ -106,45 +82,37 @@ async def generate_vibration_pattern(arguments: GenerateVibrationArgs) -> List[T
             "frequency": 0,
             "duration": 0,
             "description": "振動なし",
+            "vibration_pattern": None
         }
         return [TextContent(type="text", text=json.dumps(result))]
     
-    # 基本パターンを取得
-    base_pattern = vibration_patterns[dominant_emotion]
+    # パターンタイプと説明を設定
+    pattern_descriptions = {
+        "joy": "軽快でリズミカルな振動",
+        "fun": "楽しい波打つような振動",
+        "anger": "強く断続的な振動",
+        "sad": "ゆっくりとした弱い振動",
+    }
     
-    # 感情の強さに応じて調整
-    emotion_multiplier = 0.2 + (emotion_value / 5) * 0.8
-    
-    # 複数の感情が高い場合の調整
-    mixed_emotions = [
-        emo for emo, val in emotions.items() 
-        if emo != dominant_emotion and val >= 3
-    ]
-    
-    # 混合パターンの作成
-    if mixed_emotions:
-        pattern_type = f"{base_pattern['pattern']}_mixed"
-        intensity_adjustment = 1.1
-        frequency_adjustment = 1.2
-    else:
-        pattern_type = base_pattern["pattern"]
-        intensity_adjustment = 1.0
-        frequency_adjustment = 1.0
+    # パターンから平均強度と合計時間を計算
+    avg_intensity = sum(step.intensity for step in pattern.steps) / len(pattern.steps)
+    total_duration = sum(step.duration for step in pattern.steps) + pattern.interval * (len(pattern.steps) - 1)
     
     # 最終的な振動設定
     result = {
         "vibration_enabled": True,
-        "pattern": pattern_type,
-        "intensity": min(
-            base_pattern["intensity_base"] * emotion_multiplier * intensity_adjustment,
-            1.0,
-        ),
-        "frequency": base_pattern["frequency_base"] * emotion_multiplier * frequency_adjustment,
-        "duration": base_pattern["duration_base"] * emotion_multiplier,
+        "pattern": dominant_emotion,
+        "intensity": avg_intensity,
+        "frequency": pattern.repeat_count,  # repeat_countを周波数として使用
+        "duration": total_duration / 1000.0,  # ミリ秒から秒に変換
         "dominant_emotion": dominant_emotion,
-        "mixed_emotions": mixed_emotions,
-        "description": base_pattern["description"],
+        "mixed_emotions": [
+            emo for emo, val in emotions.items() 
+            if emo != dominant_emotion and val >= 3
+        ],
+        "description": pattern_descriptions.get(dominant_emotion, "カスタム振動パターン"),
         "emotion_level": emotion_value,
+        "vibration_pattern": pattern.to_dict()  # 実際のパターンデータを含める
     }
     
     return [TextContent(type="text", text=json.dumps(result))]
@@ -163,22 +131,36 @@ async def control_vibration(arguments: ControlVibrationArgs) -> List[TextContent
         result = {"command": "STOP", "message": "振動を停止します", "arduino_sent": True}
         return [TextContent(type="text", text=json.dumps(result))]
     
-    # パターンに応じたコマンドの生成
-    pattern = vibration_settings["pattern"]
-    intensity = vibration_settings["intensity"]  # 0.0-1.0の範囲
-    frequency = vibration_settings["frequency"]
-    duration = int(vibration_settings["duration"] * 1000)  # ミリ秒に変換
-    
-    # パターンタイプの簡略化（mixed → 通常のパターン）
-    base_pattern = pattern.replace("_mixed", "")
-    
-    # VibrationPatternGeneratorを使用してパターンを生成
-    vibration_pattern = VibrationPatternGenerator.create_custom_pattern(
-        pattern_type=base_pattern,
-        intensity=intensity,
-        duration_ms=duration,
-        repeat_count=int(frequency)
-    )
+    # 既に生成されたパターンがある場合はそれを使用
+    if "vibration_pattern" in vibration_settings and vibration_settings["vibration_pattern"]:
+        vibration_pattern_dict = vibration_settings["vibration_pattern"]
+        # 辞書からVibrationPatternオブジェクトを再構築
+        from src.devices.vibration_patterns import VibrationPattern, VibrationStep
+        steps = [
+            VibrationStep(
+                intensity=step["intensity"] / 100.0,  # 100スケールから0-1スケールに変換
+                duration=step["duration"]
+            )
+            for step in vibration_pattern_dict["steps"]
+        ]
+        vibration_pattern = VibrationPattern(
+            steps=steps,
+            interval=vibration_pattern_dict.get("interval", 50),
+            repeat_count=vibration_pattern_dict.get("repeat_count", 1)
+        )
+    else:
+        # 後方互換性のため、パターンがない場合は生成
+        pattern = vibration_settings.get("pattern", "pulse")
+        intensity = vibration_settings.get("intensity", 0.5)
+        frequency = vibration_settings.get("frequency", 1)
+        duration = int(vibration_settings.get("duration", 1) * 1000)
+        
+        vibration_pattern = VibrationPatternGenerator.create_custom_pattern(
+            pattern_type=pattern,
+            intensity=intensity,
+            duration_ms=duration,
+            repeat_count=int(frequency)
+        )
     
     # Arduinoに送信
     arduino_sent = False
@@ -193,26 +175,12 @@ async def control_vibration(arguments: ControlVibrationArgs) -> List[TextContent
         except Exception as e:
             arduino_response = {"error": str(e)}
     
-    # コマンド生成（後方互換性のため）
-    intensity_255 = int(intensity * 255)
-    command_map = {
-        "pulse": f"PULSE:{intensity_255},{frequency},{duration}",
-        "wave": f"WAVE:{intensity_255},{frequency},{duration}",
-        "burst": f"BURST:{intensity_255},{frequency},{duration}",
-        "fade": f"FADE:{intensity_255},{frequency},{duration}",
-    }
-    
-    command = command_map.get(base_pattern, f"DEFAULT:{intensity_255},{frequency},{duration}")
-    
     result = {
-        "command": command,
         "message": f"{vibration_settings.get('description', '振動パターン')}を実行します",
         "details": {
-            "pattern": pattern,
-            "intensity": intensity,
-            "frequency": frequency,
-            "duration": duration,
-            "emotion": vibration_settings.get("dominant_emotion", "unknown"),
+            "pattern": vibration_settings.get("pattern", "unknown"),
+            "dominant_emotion": vibration_settings.get("dominant_emotion", "unknown"),
+            "emotion_level": vibration_settings.get("emotion_level", 0),
         },
         "arduino_sent": arduino_sent,
         "arduino_pattern": vibration_pattern.to_dict() if vibration_pattern else None,
