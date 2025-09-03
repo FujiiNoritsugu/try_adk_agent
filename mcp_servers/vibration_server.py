@@ -124,6 +124,9 @@ async def control_vibration(arguments: ControlVibrationArgs) -> List[TextContent
     
     vibration_settings = arguments.vibration_settings
     
+    # デバッグログ
+    print(f"[DEBUG] control_vibration received settings: {json.dumps(vibration_settings, indent=2)}")
+    
     if not vibration_settings.get("vibration_enabled", False):
         # 振動を停止
         if arduino_controller and arduino_controller.is_connected:
@@ -170,10 +173,16 @@ async def control_vibration(arguments: ControlVibrationArgs) -> List[TextContent
         arduino_response = {"error": "Arduinoが初期化されていません"}
     else:
         try:
+            # デバッグ: 送信するパターンをログ出力
+            pattern_dict = vibration_pattern.to_dict()
+            print(f"[DEBUG] Sending pattern to Arduino: {json.dumps(pattern_dict, indent=2)}")
+            
             arduino_sent = await arduino_controller.send_pattern(vibration_pattern)
             arduino_response = {"success": arduino_sent}
+            print(f"[DEBUG] Arduino send result: {arduino_sent}")
         except Exception as e:
             arduino_response = {"error": str(e)}
+            print(f"[DEBUG] Arduino send error: {str(e)}")
     
     result = {
         "message": f"{vibration_settings.get('description', '振動パターン')}を実行します",
@@ -194,6 +203,8 @@ async def initialize_arduino(arguments: InitializeArduinoArgs) -> List[TextConte
     """ArduinoをWiFi経由で初期化します"""
     global arduino_controller
     
+    print(f"[DEBUG] Initializing Arduino at {arguments.host}:{arguments.port}")
+    
     try:
         # 既存の接続を閉じる
         if arduino_controller and arduino_controller.is_connected:
@@ -207,6 +218,7 @@ async def initialize_arduino(arguments: InitializeArduinoArgs) -> List[TextConte
         )
         
         connected = await arduino_controller.connect()
+        print(f"[DEBUG] Arduino connection result: {connected}")
         
         if connected:
             # ステータス取得
