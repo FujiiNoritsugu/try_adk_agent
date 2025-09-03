@@ -5,7 +5,7 @@ Direct vibration control tool for ADK Web
 import asyncio
 import json
 from typing import Dict, Any
-from google.adk.tool import Tool, tool
+from google.adk.tools import FunctionTool
 import sys
 import os
 
@@ -19,7 +19,6 @@ from src.devices import ArduinoController, VibrationPatternGenerator
 arduino_controller = None
 arduino_initialized = False
 
-@tool
 async def initialize_arduino_direct(host: str = "192.168.43.166", port: int = 80) -> Dict[str, Any]:
     """Arduino haptic deviceを初期化します"""
     global arduino_controller, arduino_initialized
@@ -57,7 +56,6 @@ async def initialize_arduino_direct(host: str = "192.168.43.166", port: int = 80
             "error": str(e)
         }
 
-@tool
 async def generate_vibration_pattern_direct(
     joy: int,
     fun: int,
@@ -93,7 +91,6 @@ async def generate_vibration_pattern_direct(
         "message": f"{dominant_emotion}パターン生成完了"
     }
 
-@tool  
 async def send_vibration_direct(pattern_dict: Dict[str, Any]) -> Dict[str, Any]:
     """振動パターンをArduinoに送信します"""
     global arduino_controller, arduino_initialized
@@ -145,7 +142,7 @@ async def send_vibration_direct(pattern_dict: Dict[str, Any]) -> Dict[str, Any]:
 
 # エクスポート
 vibration_tools = [
-    initialize_arduino_direct,
-    generate_vibration_pattern_direct,
-    send_vibration_direct
+    FunctionTool(initialize_arduino_direct),
+    FunctionTool(generate_vibration_pattern_direct),
+    FunctionTool(send_vibration_direct)
 ]

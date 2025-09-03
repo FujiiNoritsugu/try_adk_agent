@@ -4,6 +4,7 @@ from google.adk.tools.mcp_tool.mcp_session_manager import StdioServerParameters
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
+
 load_dotenv()
 
 
@@ -19,61 +20,46 @@ class TouchInput(BaseModel):
 
 
 # プロンプトファイルの読み込み
-with open("prompt/system_prompt", "r", encoding="utf-8") as f:
+with open("prompt/system_prompt_direct", "r", encoding="utf-8") as f:
     system_prompt = f.read()
 
-with open("prompt/emoji_prompt", "r", encoding="utf-8") as f:
-    emoji_prompt = f.read()
-
-with open("prompt/vibration_prompt", "r", encoding="utf-8") as f:
-    vibration_prompt = f.read()
-
 # MCPサーバーの接続設定
-# 絵文字用MCPサーバー（別途実装が必要）
+# 絵文字用MCPサーバー
 emoji_mcp_params = StdioConnectionParams(
     server_params=StdioServerParameters(
-        command='python',
-        args=['mcp_servers/emoji_server.py'],
+        command="python",
+        args=["mcp_servers/emoji_server.py"],
     ),
-    timeout=5.0
+    timeout=5.0,
 )
 
-# 振動制御用MCPサーバー（別途実装が必要）
+# 振動制御用MCPサーバー
 vibration_mcp_params = StdioConnectionParams(
     server_params=StdioServerParameters(
-        command='python',
-        args=['mcp_servers/vibration_server.py'],
+        command="python",
+        args=["mcp_servers/vibration_server.py"],
     ),
-    timeout=5.0
+    timeout=5.0,
 )
 
 # MCPToolsetの作成
 emoji_toolset = MCPToolset(
     connection_params=emoji_mcp_params,
-    tool_filter=['add_emoji'],  # 特定のツールのみ使用
+    tool_filter=["add_emoji"],
 )
 
 vibration_toolset = MCPToolset(
     connection_params=vibration_mcp_params,
-    tool_filter=['generate_vibration_pattern', 'control_vibration', 'initialize_arduino', 'send_arduino_vibration'],
+    tool_filter=["generate_vibration_pattern", "control_vibration", "initialize_arduino", "send_arduino_vibration"],
 )
 
 # エージェントの定義
-vibration_agent = Agent(
-    name="vibration_agent",
-    model="gemini-1.5-flash",
-    description="感情に基づいて振動パターンを制御する専門エージェント",
-    instruction=vibration_prompt,
-    tools=[vibration_toolset],
-)
-
 root_agent = Agent(
     name="emotion_agent",
     model="gemini-1.5-flash",
     description="触覚を通じて感情を検出し応答するエージェント",
     instruction=system_prompt,
-    tools=[emoji_toolset, vibration_toolset],  # 両方のtoolsetを直接使用
-    sub_agents=[vibration_agent],
+    tools=[emoji_toolset, vibration_toolset],  # 両方のMCPツールセットを使用
     input_schema=TouchInput,
 )
 
