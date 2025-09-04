@@ -93,14 +93,13 @@ class ArduinoController(BaseController):
             async with self.session.post(url, json=pattern) as response:
                 if response.status == 200:
                     data = await response.json()
-                    if data.get("status") == "ok":
-                        self.logger.debug(f"Pattern sent successfully: {pattern}")
-                        return True
-                    else:
-                        self.logger.error(f"Pattern rejected: {data}")
-                        return False
+                    self.logger.debug(f"Pattern sent successfully: {pattern}")
+                    self.logger.debug(f"Arduino response: {data}")
+                    return True
                 else:
                     self.logger.error(f"HTTP error {response.status}")
+                    text = await response.text()
+                    self.logger.error(f"Response text: {text}")
                     return False
                     
         except Exception as e:

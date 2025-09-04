@@ -137,20 +137,8 @@ async def control_vibration(arguments: ControlVibrationArgs) -> List[TextContent
     # 既に生成されたパターンがある場合はそれを使用
     if "vibration_pattern" in vibration_settings and vibration_settings["vibration_pattern"]:
         vibration_pattern_dict = vibration_settings["vibration_pattern"]
-        # 辞書からVibrationPatternオブジェクトを再構築
-        from src.devices.vibration_patterns import VibrationPattern, VibrationStep
-        steps = [
-            VibrationStep(
-                intensity=step["intensity"] / 100.0,  # 100スケールから0-1スケールに変換
-                duration=step["duration"]
-            )
-            for step in vibration_pattern_dict["steps"]
-        ]
-        vibration_pattern = VibrationPattern(
-            steps=steps,
-            interval=vibration_pattern_dict.get("interval", 50),
-            repeat_count=vibration_pattern_dict.get("repeat_count", 1)
-        )
+        # そのまま辞書形式でArduinoに送信（変換不要）
+        vibration_pattern = vibration_pattern_dict
     else:
         # 後方互換性のため、パターンがない場合は生成
         pattern = vibration_settings.get("pattern", "pulse")
@@ -174,10 +162,13 @@ async def control_vibration(arguments: ControlVibrationArgs) -> List[TextContent
     else:
         try:
             # デバッグ: 送信するパターンをログ出力
-            pattern_dict = vibration_pattern.to_dict()
+            if isinstance(vibration_pattern, dict):
+                pattern_dict = vibration_pattern
+            else:
+                pattern_dict = vibration_pattern.to_dict()
             print(f"[DEBUG] Sending pattern to Arduino: {json.dumps(pattern_dict, indent=2)}")
             
-            arduino_sent = await arduino_controller.send_pattern(vibration_pattern)
+            arduino_sent = await arduino_controller.send_pattern(pattern_dict)
             arduino_response = {"success": arduino_sent}
             print(f"[DEBUG] Arduino send result: {arduino_sent}")
         except Exception as e:
@@ -192,7 +183,7 @@ async def control_vibration(arguments: ControlVibrationArgs) -> List[TextContent
             "emotion_level": vibration_settings.get("emotion_level", 0),
         },
         "arduino_sent": arduino_sent,
-        "arduino_pattern": vibration_pattern.to_dict() if vibration_pattern else None,
+        "arduino_pattern": pattern_dict if 'pattern_dict' in locals() else None,
         "arduino_response": arduino_response
     }
     
