@@ -55,7 +55,10 @@ class ArduinoController(BaseController):
         """Disconnect from Arduino device"""
         if self.is_connected:
             # Stop any ongoing vibration
-            await self.stop()
+            try:
+                await self.stop()
+            except Exception as e:
+                self.logger.warning(f"Failed to stop vibration during disconnect: {e}")
             
         await self._close_session()
         self.is_connected = False
@@ -76,6 +79,10 @@ class ArduinoController(BaseController):
             return False
             
         try:
+            # Ensure session exists
+            if not self.session or self.session.closed:
+                await self._create_session()
+                
             # Convert VibrationPattern to dict if needed
             if isinstance(pattern, VibrationPattern):
                 pattern = pattern.to_dict()
@@ -106,6 +113,10 @@ class ArduinoController(BaseController):
             return False
             
         try:
+            # Ensure session exists
+            if not self.session or self.session.closed:
+                await self._create_session()
+                
             url = f"{self.base_url}/stop"
             
             async with self.session.post(url) as response:

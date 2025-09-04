@@ -56,7 +56,7 @@ class BaseController(ABC):
         
     async def _create_session(self) -> None:
         """Create HTTP session with timeout"""
-        if not self.session:
+        if not self.session or self.session.closed:
             timeout_config = aiohttp.ClientTimeout(total=self.timeout)
             self.session = aiohttp.ClientSession(timeout=timeout_config)
             

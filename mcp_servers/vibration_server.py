@@ -206,7 +206,25 @@ async def initialize_arduino(arguments: InitializeArduinoArgs) -> List[TextConte
     print(f"[DEBUG] Initializing Arduino at {arguments.host}:{arguments.port}")
     
     try:
-        # 既存の接続を閉じる
+        # 既に同じホストに接続されている場合は再利用
+        if (arduino_controller and 
+            arduino_controller.is_connected and 
+            arduino_controller.host == arguments.host and 
+            arduino_controller.port == arguments.port):
+            print(f"[DEBUG] Reusing existing connection to {arguments.host}:{arguments.port}")
+            status = await arduino_controller.get_status()
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "success": True,
+                    "message": "既存のArduino接続を再利用します",
+                    "host": arguments.host,
+                    "port": arguments.port,
+                    "status": status
+                })
+            )]
+        
+        # 異なるホストまたは未接続の場合は新規接続
         if arduino_controller and arduino_controller.is_connected:
             await arduino_controller.disconnect()
         

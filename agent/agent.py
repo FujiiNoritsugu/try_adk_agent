@@ -107,30 +107,30 @@ def generate_vibration_pattern(joy: int, fun: int, anger: int, sad: int) -> dict
     vibration_patterns = {
         "joy": {
             "pattern": "pulse",
-            "intensity_base": 0.6,
-            "frequency_base": 2.0,  # Hz
-            "duration_base": 0.5,  # seconds
+            "intensity_base": 1.0,  # 100%最大強度
+            "frequency_base": 3.0,  # 繰り返し回数を増加
+            "duration_base": 5.0,  # 5秒に延長
             "description": "軽快でリズミカルな振動",
         },
         "fun": {
             "pattern": "wave",
-            "intensity_base": 0.7,
-            "frequency_base": 3.0,
-            "duration_base": 0.3,
+            "intensity_base": 1.0,  # 100%最大強度
+            "frequency_base": 4.0,  # 繰り返し回数を増加
+            "duration_base": 4.0,  # 4秒に延長
             "description": "楽しい波打つような振動",
         },
         "anger": {
             "pattern": "burst",
-            "intensity_base": 0.9,
-            "frequency_base": 5.0,
-            "duration_base": 0.2,
+            "intensity_base": 1.0,  # 100%最大値
+            "frequency_base": 6.0,  # 繰り返し回数を増加
+            "duration_base": 3.0,  # 3秒に延長
             "description": "強く断続的な振動",
         },
         "sad": {
             "pattern": "fade",
-            "intensity_base": 0.4,
-            "frequency_base": 1.0,
-            "duration_base": 1.0,
+            "intensity_base": 0.8,  # 80%に増加
+            "frequency_base": 2.0,  # 繰り返し回数を増加
+            "duration_base": 6.0,  # 6秒に延長
             "description": "ゆっくりとした弱い振動",
         },
     }
@@ -175,22 +175,34 @@ def generate_vibration_pattern(joy: int, fun: int, anger: int, sad: int) -> dict
         intensity_adjustment = 1.0
         frequency_adjustment = 1.0
 
+    # 最終的な強度と持続時間を計算
+    final_intensity = min(
+        base_pattern["intensity_base"] * emotion_multiplier * intensity_adjustment,
+        1.0,
+    )
+    final_duration_ms = int(base_pattern["duration_base"] * emotion_multiplier * 1000)
+    
+    # Arduino形式のパターンを作成（test_arduino_max_vibration.pyと同じ形式）
+    vibration_pattern = {
+        "steps": [
+            {"intensity": int(final_intensity * 100), "duration": final_duration_ms}
+        ],
+        "interval": 0,
+        "repeat_count": int(base_pattern["frequency_base"] * emotion_multiplier * frequency_adjustment)
+    }
+    
     # 最終的な振動設定
     return {
         "vibration_enabled": True,
         "pattern": pattern_type,
-        "intensity": min(
-            base_pattern["intensity_base"] * emotion_multiplier * intensity_adjustment,
-            1.0,
-        ),
-        "frequency": base_pattern["frequency_base"]
-        * emotion_multiplier
-        * frequency_adjustment,
+        "intensity": final_intensity,
+        "frequency": base_pattern["frequency_base"] * emotion_multiplier * frequency_adjustment,
         "duration": base_pattern["duration_base"] * emotion_multiplier,
         "dominant_emotion": dominant_emotion,
         "mixed_emotions": mixed_emotions,
         "description": base_pattern["description"],
         "emotion_level": emotion_value,
+        "vibration_pattern": vibration_pattern
     }
 
 
@@ -209,7 +221,8 @@ def control_vibration(vibration_settings: dict) -> dict:
 
     # パターンに応じたコマンドの生成
     pattern = vibration_settings["pattern"]
-    intensity = int(vibration_settings["intensity"] * 255)  # 0-255の範囲に変換
+    # 強度を100%スケールに変換（test_arduino_max_vibration.pyと同じ形式）
+    intensity = int(vibration_settings["intensity"] * 100)  # 0-100の範囲に変換
     frequency = vibration_settings["frequency"]
     duration = int(vibration_settings["duration"] * 1000)  # ミリ秒に変換
 
