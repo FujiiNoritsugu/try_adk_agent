@@ -127,6 +127,46 @@ async def control_vibration(arguments: ControlVibrationArgs) -> List[TextContent
     # デバッグログ
     print(f"[DEBUG] control_vibration received settings: {json.dumps(vibration_settings, indent=2)}")
     
+    # 毎回Arduinoを初期化
+    arduino_host = "192.168.43.166"  # デフォルトのArduino IPアドレス
+    arduino_port = 80
+    
+    print(f"[DEBUG] Auto-initializing Arduino at {arduino_host}:{arduino_port}")
+    
+    try:
+        # 既存の接続があれば閉じる
+        if arduino_controller and arduino_controller.is_connected:
+            await arduino_controller.disconnect()
+        
+        # 新しいArduinoコントローラーを作成
+        arduino_controller = ArduinoController(
+            "haptic_device",
+            host=arduino_host,
+            port=arduino_port
+        )
+        
+        connected = await arduino_controller.connect()
+        if not connected:
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "error": "Arduinoの自動初期化に失敗しました",
+                    "arduino_sent": False
+                })
+            )]
+        
+        print(f"[DEBUG] Arduino auto-initialization successful")
+        
+    except Exception as e:
+        print(f"[DEBUG] Arduino auto-initialization error: {str(e)}")
+        return [TextContent(
+            type="text",
+            text=json.dumps({
+                "error": f"Arduino初期化エラー: {str(e)}",
+                "arduino_sent": False
+            })
+        )]
+    
     if not vibration_settings.get("vibration_enabled", False):
         # 振動を停止
         if arduino_controller and arduino_controller.is_connected:

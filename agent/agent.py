@@ -108,29 +108,29 @@ def generate_vibration_pattern(joy: int, fun: int, anger: int, sad: int) -> dict
         "joy": {
             "pattern": "pulse",
             "intensity_base": 1.0,  # 100%最大強度
-            "frequency_base": 3.0,  # 繰り返し回数を増加
-            "duration_base": 5.0,  # 5秒に延長
+            "frequency_base": 5.0,  # 5回繰り返し
+            "duration_base": 10.0,  # 10秒に延長
             "description": "軽快でリズミカルな振動",
         },
         "fun": {
             "pattern": "wave",
             "intensity_base": 1.0,  # 100%最大強度
-            "frequency_base": 4.0,  # 繰り返し回数を増加
-            "duration_base": 4.0,  # 4秒に延長
+            "frequency_base": 6.0,  # 6回繰り返し
+            "duration_base": 8.0,  # 8秒に延長
             "description": "楽しい波打つような振動",
         },
         "anger": {
             "pattern": "burst",
             "intensity_base": 1.0,  # 100%最大値
-            "frequency_base": 6.0,  # 繰り返し回数を増加
-            "duration_base": 3.0,  # 3秒に延長
+            "frequency_base": 8.0,  # 8回繰り返し
+            "duration_base": 6.0,  # 6秒に延長
             "description": "強く断続的な振動",
         },
         "sad": {
             "pattern": "fade",
-            "intensity_base": 0.8,  # 80%に増加
-            "frequency_base": 2.0,  # 繰り返し回数を増加
-            "duration_base": 6.0,  # 6秒に延長
+            "intensity_base": 1.0,  # 100%に増加
+            "frequency_base": 4.0,  # 4回繰り返し
+            "duration_base": 12.0,  # 12秒に延長
             "description": "ゆっくりとした弱い振動",
         },
     }
@@ -182,13 +182,18 @@ def generate_vibration_pattern(joy: int, fun: int, anger: int, sad: int) -> dict
     )
     final_duration_ms = int(base_pattern["duration_base"] * emotion_multiplier * 1000)
     
-    # Arduino形式のパターンを作成（test_arduino_max_vibration.pyと同じ形式）
+    # Arduino形式のパターンを作成（より強く長い振動パターン）
+    # 複数ステップで強い振動を継続
     vibration_pattern = {
         "steps": [
-            {"intensity": int(final_intensity * 100), "duration": final_duration_ms}
+            {"intensity": 100, "duration": 2000},  # 100%強度で2秒
+            {"intensity": 0, "duration": 200},      # 0.2秒休止
+            {"intensity": 100, "duration": 2000},  # 100%強度で2秒
+            {"intensity": 0, "duration": 200},      # 0.2秒休止
+            {"intensity": 100, "duration": 2000},  # 100%強度で2秒
         ],
         "interval": 0,
-        "repeat_count": int(base_pattern["frequency_base"] * emotion_multiplier * frequency_adjustment)
+        "repeat_count": max(3, int(base_pattern["frequency_base"] * emotion_multiplier * frequency_adjustment))  # 最低3回繰り返し
     }
     
     # 最終的な振動設定
