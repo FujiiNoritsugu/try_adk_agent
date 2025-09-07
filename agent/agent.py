@@ -156,8 +156,8 @@ def generate_vibration_pattern(joy: int, fun: int, anger: int, sad: int) -> dict
     # 基本パターンを取得
     base_pattern = vibration_patterns[dominant_emotion]
 
-    # 感情の強さに応じて調整（1-5を0.2-1.0にマッピング）
-    emotion_multiplier = 0.2 + (emotion_value / 5) * 0.8
+    # 感情の強さに応じて調整（1-5を0.6-1.0にマッピング）
+    emotion_multiplier = 0.6 + (emotion_value / 5) * 0.4
 
     # 複数の感情が高い場合の調整
     mixed_emotions = [
@@ -186,11 +186,11 @@ def generate_vibration_pattern(joy: int, fun: int, anger: int, sad: int) -> dict
     # 複数ステップで強い振動を継続
     vibration_pattern = {
         "steps": [
-            {"intensity": 100, "duration": 2000},  # 100%強度で2秒
-            {"intensity": 0, "duration": 200},      # 0.2秒休止
-            {"intensity": 100, "duration": 2000},  # 100%強度で2秒
-            {"intensity": 0, "duration": 200},      # 0.2秒休止
-            {"intensity": 100, "duration": 2000},  # 100%強度で2秒
+            {"intensity": 100, "duration": 3000},  # 100%強度で3秒
+            {"intensity": 0, "duration": 500},      # 0.5秒休止
+            {"intensity": 100, "duration": 3000},  # 100%強度で3秒
+            {"intensity": 0, "duration": 500},      # 0.5秒休止
+            {"intensity": 100, "duration": 3000},  # 100%強度で3秒
         ],
         "interval": 0,
         "repeat_count": max(3, int(base_pattern["frequency_base"] * emotion_multiplier * frequency_adjustment))  # 最低3回繰り返し
@@ -219,42 +219,12 @@ def control_vibration(vibration_settings: dict) -> dict:
         vibration_settings: generate_vibration_patternから返される設定
 
     Returns:
-        振動制御コマンドを含む辞書
+        振動制御結果を含む辞書
     """
-    if not vibration_settings.get("vibration_enabled", False):
-        return {"command": "STOP", "message": "振動を停止します"}
-
-    # パターンに応じたコマンドの生成
-    pattern = vibration_settings["pattern"]
-    # 強度を100%スケールに変換（test_arduino_max_vibration.pyと同じ形式）
-    intensity = int(vibration_settings["intensity"] * 100)  # 0-100の範囲に変換
-    frequency = vibration_settings["frequency"]
-    duration = int(vibration_settings["duration"] * 1000)  # ミリ秒に変換
-
-    command_map = {
-        "pulse": f"PULSE:{intensity},{frequency},{duration}",
-        "wave": f"WAVE:{intensity},{frequency},{duration}",
-        "burst": f"BURST:{intensity},{frequency},{duration}",
-        "fade": f"FADE:{intensity},{frequency},{duration}",
-        "pulse_mixed": f"MIXED_PULSE:{intensity},{frequency},{duration}",
-        "wave_mixed": f"MIXED_WAVE:{intensity},{frequency},{duration}",
-        "burst_mixed": f"MIXED_BURST:{intensity},{frequency},{duration}",
-        "fade_mixed": f"MIXED_FADE:{intensity},{frequency},{duration}",
-    }
-
-    command = command_map.get(pattern, f"DEFAULT:{intensity},{frequency},{duration}")
-
-    return {
-        "command": command,
-        "message": f"{vibration_settings['description']}を実行します",
-        "details": {
-            "pattern": pattern,
-            "intensity": intensity,
-            "frequency": frequency,
-            "duration": duration,
-            "emotion": vibration_settings.get("dominant_emotion", "unknown"),
-        },
-    }
+    # MCPサーバーのcontrol_vibration関数が振動設定を受け取って
+    # 実際にArduinoに送信する処理を行うため、
+    # ここでは振動設定をそのまま返す
+    return vibration_settings
 
 
 # FunctionToolで関数をラップ
