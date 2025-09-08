@@ -42,6 +42,15 @@ vibration_mcp_params = StdioConnectionParams(
     timeout=5.0,
 )
 
+# VOICEVOX用MCPサーバー
+voicevox_mcp_params = StdioConnectionParams(
+    server_params=StdioServerParameters(
+        command="python",
+        args=["mcp_servers/voicevox_server.py"],
+    ),
+    timeout=5.0,
+)
+
 # MCPToolsetの作成
 emoji_toolset = MCPToolset(
     connection_params=emoji_mcp_params,
@@ -53,13 +62,18 @@ vibration_toolset = MCPToolset(
     tool_filter=["generate_vibration_pattern", "control_vibration", "initialize_arduino", "send_arduino_vibration"],
 )
 
+voicevox_toolset = MCPToolset(
+    connection_params=voicevox_mcp_params,
+    tool_filter=["text_to_speech", "set_speaker", "get_speakers"],
+)
+
 # エージェントの定義
 root_agent = Agent(
     name="emotion_agent",
     model="gemini-1.5-flash",
     description="触覚を通じて感情を検出し応答するエージェント",
     instruction=system_prompt,
-    tools=[emoji_toolset, vibration_toolset],  # 両方のMCPツールセットを使用
+    tools=[emoji_toolset, vibration_toolset, voicevox_toolset],  # 全てのMCPツールセットを使用
     input_schema=TouchInput,
 )
 
