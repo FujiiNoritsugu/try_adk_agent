@@ -4,11 +4,11 @@ import json
 import logging
 from typing import Any
 import requests
-import pygame
 from io import BytesIO
 import tempfile
 import os
 from pathlib import Path
+import subprocess
 
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
@@ -29,7 +29,6 @@ class VoiceVoxServer:
     def __init__(self):
         self.voicevox_url = "http://localhost:50021"
         self.speaker_id = 1  # デフォルトスピーカーID
-        pygame.mixer.init()
         logger.info("VoiceVoxServer initialized")
 
     async def initialize(self) -> None:
@@ -77,14 +76,16 @@ class VoiceVoxServer:
                     "error": f"Failed to synthesize audio: {synthesis_response.status_code}"
                 }
 
-            # 音声データを再生
-            audio_data = BytesIO(synthesis_response.content)
-            pygame.mixer.music.load(audio_data)
-            pygame.mixer.music.play()
+            # 一時ファイルに保存して再生
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+                tmp_file.write(synthesis_response.content)
+                tmp_file_path = tmp_file.name
 
-            # 再生が終わるまで待機
-            while pygame.mixer.music.get_busy():
-                pygame.time.Clock().tick(10)
+            # paplayで再生
+            subprocess.run(["paplay", tmp_file_path])
+
+            # 一時ファイルを削除
+            os.remove(tmp_file_path)
 
             return {
                 "success": True,

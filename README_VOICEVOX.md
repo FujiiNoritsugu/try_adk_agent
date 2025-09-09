@@ -21,7 +21,7 @@ VOICEVOXは無料の音声合成ソフトウェアです。以下の手順でイ
 ## Pythonパッケージのインストール
 
 ```bash
-pip install pygame requests
+pip install requests
 ```
 
 ## 動作確認
@@ -38,8 +38,9 @@ curl http://localhost:50021/speakers
 
 ```python
 import requests
-import pygame
-from io import BytesIO
+import subprocess
+import tempfile
+import os
 
 # 音声合成クエリの作成
 response = requests.post(
@@ -55,10 +56,16 @@ response = requests.post(
     json=query
 )
 
-# 再生
-pygame.mixer.init()
-pygame.mixer.music.load(BytesIO(response.content))
-pygame.mixer.music.play()
+# 一時ファイルに保存して再生
+with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+    tmp_file.write(response.content)
+    tmp_file_path = tmp_file.name
+
+# paplayで再生
+subprocess.run(["paplay", tmp_file_path])
+
+# 一時ファイルを削除
+os.remove(tmp_file_path)
 ```
 
 ## トラブルシューティング
@@ -73,7 +80,8 @@ pygame.mixer.music.play()
 
 1. システムの音量設定を確認
 2. 音声出力デバイスが正しく設定されているか確認
-3. pygameが正しくインストールされているか確認
+3. PulseAudioが正しく動作しているか確認（`pactl info`コマンドで確認）
+4. paplayコマンドが利用可能か確認（`which paplay`コマンドで確認）
 
 ## 使用可能なスピーカー
 
