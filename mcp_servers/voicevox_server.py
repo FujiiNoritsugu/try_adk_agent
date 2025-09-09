@@ -256,7 +256,7 @@ async def run():
             return await handle_call_tool(name, arguments)
 
         # サーバー実行
-        await server.run(read_stream, write_stream)
+        await server.run(read_stream, write_stream, initialization_options)
 
 
 if __name__ == "__main__":
