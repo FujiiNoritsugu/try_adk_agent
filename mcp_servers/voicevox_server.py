@@ -81,11 +81,29 @@ class VoiceVoxServer:
                 tmp_file.write(synthesis_response.content)
                 tmp_file_path = tmp_file.name
 
-            # paplayで再生
-            subprocess.run(["paplay", tmp_file_path])
-
-            # 一時ファイルを削除
-            os.remove(tmp_file_path)
+            # シェルスクリプトを使って音声を非同期で再生
+            script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'play_audio.sh')
+            logger.info(f"Script path: {script_path}")
+            logger.info(f"Audio file path: {tmp_file_path}")
+            logger.info(f"Audio file size: {os.path.getsize(tmp_file_path)} bytes")
+            
+            # スクリプトの存在確認
+            if not os.path.exists(script_path):
+                logger.error(f"Script not found: {script_path}")
+                return {
+                    "success": False,
+                    "error": f"Script not found: {script_path}"
+                }
+            
+            # シェルスクリプトを非同期で実行（即座に戻る）
+            process = subprocess.Popen([script_path, tmp_file_path], 
+                                     stdout=subprocess.PIPE, 
+                                     stderr=subprocess.PIPE)
+            logger.info(f"Started process with PID: {process.pid}")
+            
+            # 一時ファイルの削除は再生開始後に行うため、少し待機
+            # または、cleanup_audio.shを別途作成して後で削除する方法もあります
+            # 今回は簡単のため、ファイルを/tmp/voicevoxに保存して定期的にクリーンアップする方法を採用
 
             return {
                 "success": True,
