@@ -3,7 +3,7 @@ import asyncio
 import json
 import logging
 from typing import Any
-import requests
+import aiohttp
 from io import BytesIO
 import tempfile
 import os
@@ -35,50 +35,54 @@ class VoiceVoxServer:
         """サーバー初期化"""
         try:
             # VOICEVOXの接続確認
-            response = requests.get(f"{self.voicevox_url}/speakers")
-            if response.status_code == 200:
-                logger.info("Successfully connected to VOICEVOX")
-            else:
-                logger.warning(f"VOICEVOX connection failed: {response.status_code}")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{self.voicevox_url}/speakers") as response:
+                    if response.status == 200:
+                        logger.info("Successfully connected to VOICEVOX")
+                    else:
+                        logger.warning(f"VOICEVOX connection failed: {response.status}")
         except Exception as e:
             logger.warning(f"VOICEVOX not available: {e}")
 
-    def text_to_speech(self, text: str, speaker_id: int = None) -> dict:
+    async def text_to_speech(self, text: str, speaker_id: int = None) -> dict:
         """テキストを音声に変換して再生"""
         try:
             if speaker_id is None:
                 speaker_id = self.speaker_id
 
             # 音声合成用のクエリを作成
-            query_response = requests.post(
-                f"{self.voicevox_url}/audio_query",
-                params={"text": text, "speaker": speaker_id}
-            )
-            
-            if query_response.status_code != 200:
-                return {
-                    "success": False,
-                    "error": f"Failed to create audio query: {query_response.status_code}"
-                }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.voicevox_url}/audio_query",
+                    params={"text": text, "speaker": speaker_id}
+                ) as query_response:
+                    
+                    if query_response.status != 200:
+                        return {
+                            "success": False,
+                            "error": f"Failed to create audio query: {query_response.status}"
+                        }
 
-            query_data = query_response.json()
+                    query_data = await query_response.json()
 
-            # 音声合成
-            synthesis_response = requests.post(
-                f"{self.voicevox_url}/synthesis",
-                params={"speaker": speaker_id},
-                json=query_data
-            )
+                # 音声合成
+                async with session.post(
+                    f"{self.voicevox_url}/synthesis",
+                    params={"speaker": speaker_id},
+                    json=query_data
+                ) as synthesis_response:
 
-            if synthesis_response.status_code != 200:
-                return {
-                    "success": False,
-                    "error": f"Failed to synthesize audio: {synthesis_response.status_code}"
-                }
+                    if synthesis_response.status != 200:
+                        return {
+                            "success": False,
+                            "error": f"Failed to synthesize audio: {synthesis_response.status}"
+                        }
+                    
+                    audio_content = await synthesis_response.read()
 
             # 一時ファイルに保存して再生
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
-                tmp_file.write(synthesis_response.content)
+                tmp_file.write(audio_content)
                 tmp_file_path = tmp_file.name
 
             # シェルスクリプトを使って音声を非同期で再生
@@ -118,34 +122,35 @@ class VoiceVoxServer:
                 "error": str(e)
             }
 
-    def set_speaker(self, speaker_id: int) -> dict:
+    async def set_speaker(self, speaker_id: int) -> dict:
         """スピーカーIDを設定"""
         try:
             # スピーカーが存在するか確認
-            response = requests.get(f"{self.voicevox_url}/speakers")
-            if response.status_code == 200:
-                speakers = response.json()
-                valid_ids = []
-                for speaker in speakers:
-                    for style in speaker["styles"]:
-                        valid_ids.append(style["id"])
-                
-                if speaker_id in valid_ids:
-                    self.speaker_id = speaker_id
-                    return {
-                        "success": True,
-                        "speaker_id": speaker_id
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "error": f"Invalid speaker_id. Valid IDs: {valid_ids}"
-                    }
-            else:
-                return {
-                    "success": False,
-                    "error": "Failed to get speaker list"
-                }
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{self.voicevox_url}/speakers") as response:
+                    if response.status == 200:
+                        speakers = await response.json()
+                        valid_ids = []
+                        for speaker in speakers:
+                            for style in speaker["styles"]:
+                                valid_ids.append(style["id"])
+                        
+                        if speaker_id in valid_ids:
+                            self.speaker_id = speaker_id
+                            return {
+                                "success": True,
+                                "speaker_id": speaker_id
+                            }
+                        else:
+                            return {
+                                "success": False,
+                                "error": f"Invalid speaker_id. Valid IDs: {valid_ids}"
+                            }
+                    else:
+                        return {
+                            "success": False,
+                            "error": "Failed to get speaker list"
+                        }
         except Exception as e:
             logger.error(f"Error in set_speaker: {e}")
             return {
@@ -153,20 +158,22 @@ class VoiceVoxServer:
                 "error": str(e)
             }
 
-    def get_speakers(self) -> dict:
+    async def get_speakers(self) -> dict:
         """利用可能なスピーカーリストを取得"""
         try:
-            response = requests.get(f"{self.voicevox_url}/speakers")
-            if response.status_code == 200:
-                return {
-                    "success": True,
-                    "speakers": response.json()
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to get speakers: {response.status_code}"
-                }
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{self.voicevox_url}/speakers") as response:
+                    if response.status == 200:
+                        speakers = await response.json()
+                        return {
+                            "success": True,
+                            "speakers": speakers
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "error": f"Failed to get speakers: {response.status}"
+                        }
         except Exception as e:
             logger.error(f"Error in get_speakers: {e}")
             return {
@@ -234,16 +241,16 @@ async def run():
             if name == "text_to_speech":
                 text = arguments.get("text", "")
                 speaker_id = arguments.get("speaker_id")
-                result = voicevox_server.text_to_speech(text, speaker_id)
+                result = await voicevox_server.text_to_speech(text, speaker_id)
                 return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
             
             elif name == "set_speaker":
                 speaker_id = arguments.get("speaker_id", 1)
-                result = voicevox_server.set_speaker(speaker_id)
+                result = await voicevox_server.set_speaker(speaker_id)
                 return [TextContent(type="text", text=json.dumps(result))]
             
             elif name == "get_speakers":
-                result = voicevox_server.get_speakers()
+                result = await voicevox_server.get_speakers()
                 return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
             
             else:
