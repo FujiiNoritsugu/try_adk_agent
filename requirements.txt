@@ -1,0 +1,17 @@
+# Google ADK Agent Requirements
+google-genai-agent
+
+# MCP Server Requirements
+mcp
+pydantic
+python-dotenv
+
+# Arduino Communication
+pyserial
+requests
+
+# Audio Output (VOICEVOX)
+pygame
+
+# Other Dependencies
+numpy

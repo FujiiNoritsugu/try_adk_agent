@@ -20,7 +20,7 @@ class TouchInput(BaseModel):
 
 
 # プロンプトファイルの読み込み
-with open("prompt/system_prompt_direct", "r", encoding="utf-8") as f:
+with open("prompt/system_prompt", "r", encoding="utf-8") as f:
     system_prompt = f.read()
 
 # MCPサーバーの接続設定
@@ -30,7 +30,7 @@ emoji_mcp_params = StdioConnectionParams(
         command="python",
         args=["mcp_servers/emoji_server.py"],
     ),
-    timeout=5.0,
+    timeout=30.0,
 )
 
 # 振動制御用MCPサーバー
@@ -39,7 +39,16 @@ vibration_mcp_params = StdioConnectionParams(
         command="python",
         args=["mcp_servers/vibration_server.py"],
     ),
-    timeout=5.0,
+    timeout=30.0,
+)
+
+# VOICEVOX用MCPサーバー
+voicevox_mcp_params = StdioConnectionParams(
+    server_params=StdioServerParameters(
+        command="python",
+        args=["mcp_servers/voicevox_server.py"],
+    ),
+    timeout=30.0,
 )
 
 # MCPToolsetの作成
@@ -53,13 +62,18 @@ vibration_toolset = MCPToolset(
     tool_filter=["generate_vibration_pattern", "control_vibration", "initialize_arduino", "send_arduino_vibration"],
 )
 
+voicevox_toolset = MCPToolset(
+    connection_params=voicevox_mcp_params,
+    tool_filter=["text_to_speech", "set_speaker", "get_speakers"],
+)
+
 # エージェントの定義
 root_agent = Agent(
     name="emotion_agent",
     model="gemini-1.5-flash",
     description="触覚を通じて感情を検出し応答するエージェント",
     instruction=system_prompt,
-    tools=[emoji_toolset, vibration_toolset],  # 両方のMCPツールセットを使用
+    tools=[emoji_toolset, vibration_toolset, voicevox_toolset],  # 全てのMCPツールセットを使用
     input_schema=TouchInput,
 )
 
