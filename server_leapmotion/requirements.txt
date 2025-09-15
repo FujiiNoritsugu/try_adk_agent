@@ -1,0 +1,10 @@
+mcp
+pydantic
+numpy
+# Leap Motion SDK - install separately based on your system
+# For Ubuntu/Debian: https://developer.leapmotion.com/tracking-software-download
+# For Windows: https://developer.leapmotion.com/tracking-software-download
+# For macOS: https://developer.leapmotion.com/tracking-software-download
+
+# Alternative Python bindings (if official SDK is not available)
+# leap-python3  # Community maintained Python 3 bindings

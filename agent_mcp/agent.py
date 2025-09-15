@@ -3,6 +3,7 @@ from google.adk.tools.mcp_tool import MCPToolset, StdioConnectionParams
 from google.adk.tools.mcp_tool.mcp_session_manager import StdioServerParameters
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+from typing import Optional, Dict
 
 
 load_dotenv()
@@ -17,6 +18,24 @@ class TouchInput(BaseModel):
         le=1.0,
     )
     touched_area: str = Field(description="触られた体の部位")
+    
+    # Leap Motion拡張フィールド（オプション）
+    gesture_type: Optional[str] = Field(
+        default=None,
+        description="Leap Motionで検出されたジェスチャータイプ（swipe, circle, tap, grab, pinch）"
+    )
+    hand_position: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="手の3D位置座標（x, y, z）"
+    )
+    hand_velocity: Optional[float] = Field(
+        default=None,
+        description="手の移動速度"
+    )
+    leap_confidence: Optional[float] = Field(
+        default=None,
+        description="Leap Motionの検出信頼度（0-1）"
+    )
 
 
 # プロンプトファイルの読み込み
@@ -51,6 +70,15 @@ voicevox_mcp_params = StdioConnectionParams(
     timeout=30.0,
 )
 
+# Leap Motion用MCPサーバー
+leapmotion_mcp_params = StdioConnectionParams(
+    server_params=StdioServerParameters(
+        command="python",
+        args=["server_leapmotion/server.py"],
+    ),
+    timeout=30.0,
+)
+
 # MCPToolsetの作成
 emoji_toolset = MCPToolset(
     connection_params=emoji_mcp_params,
@@ -67,13 +95,18 @@ voicevox_toolset = MCPToolset(
     tool_filter=["text_to_speech", "set_speaker", "get_speakers"],
 )
 
+leapmotion_toolset = MCPToolset(
+    connection_params=leapmotion_mcp_params,
+    tool_filter=["get_leap_motion_data", "convert_to_touch", "set_gesture_mapping"],
+)
+
 # エージェントの定義
 root_agent = Agent(
     name="emotion_agent",
     model="gemini-1.5-flash",
     description="触覚を通じて感情を検出し応答するエージェント",
     instruction=system_prompt,
-    tools=[emoji_toolset, vibration_toolset, voicevox_toolset],  # 全てのMCPツールセットを使用
+    tools=[emoji_toolset, vibration_toolset, voicevox_toolset, leapmotion_toolset],  # 全てのMCPツールセットを使用
     input_schema=TouchInput,
 )
 
