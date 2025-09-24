@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # Try to import Leap Motion library
 try:
     import leap
+    from leap import datatypes as ldt
     LEAP_AVAILABLE = True
 except ImportError:
     logger.warning("Leap Motion SDK not found. Install with: pip install leapmotion")
@@ -35,11 +36,21 @@ class LeapMotionData(BaseModel):
     palm_normal: Dict[str, float] = Field(description="Palm normal vector")
     fingers_extended: int = Field(description="Number of extended fingers")
 
+class LeapListener(leap.Listener):
+    """Leap Motion event listener"""
+    def __init__(self):
+        super().__init__()
+        self.latest_frame = None
+
+    def on_tracking_event(self, event):
+        """Store the latest tracking frame"""
+        self.latest_frame = event
+
 class LeapMotionServer:
     def __init__(self):
         self.server = Server("leapmotion-server")
-        self.controller = None
-        self.latest_frame = None
+        self.connection = None
+        self.listener = None
         self.gesture_mappings = {
             "swipe": {"intensity": 0.3, "area": "air"},
             "circle": {"intensity": 0.5, "area": "air"},
@@ -47,50 +58,63 @@ class LeapMotionServer:
             "grab": {"intensity": 0.8, "area": "air"},
             "pinch": {"intensity": 0.6, "area": "air"}
         }
-        
+
         # Setup server handlers
         self.setup_handlers()
-        
+
         # Initialize Leap Motion if available
         if LEAP_AVAILABLE:
             self.init_leap_motion()
     
     def init_leap_motion(self):
-        """Initialize Leap Motion controller"""
+        """Initialize Leap Motion connection and listener"""
         try:
-            self.controller = leap.Controller()
-            self.controller.set_policy(leap.Controller.POLICY_BACKGROUND_FRAMES)
-            logger.info("Leap Motion controller initialized")
+            self.listener = LeapListener()
+            self.connection = leap.Connection()
+            self.connection.add_listener(self.listener)
+            logger.info("Leap Motion connection initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Leap Motion: {e}")
-            self.controller = None
+            self.connection = None
+            self.listener = None
     
     def get_current_frame(self) -> Optional[Dict[str, Any]]:
         """Get current frame data from Leap Motion"""
-        if not self.controller or not self.controller.is_connected:
+        if not self.listener or not self.listener.latest_frame:
             return None
-        
-        frame = self.controller.frame()
-        if not frame.is_valid or len(frame.hands) == 0:
+
+        event = self.listener.latest_frame
+        if not event.hands or len(event.hands) == 0:
             return None
-        
-        hand = frame.hands[0]
-        
+
+        hand = event.hands[0]
+
+        # Calculate palm velocity magnitude
+        palm_velocity = hand.palm.velocity
+        velocity_magnitude = (palm_velocity.x**2 + palm_velocity.y**2 + palm_velocity.z**2) ** 0.5
+
+        # Count extended fingers
+        fingers_extended = 0
+        for digit in hand.digits:
+            # Check if finger is extended based on curl angle
+            if digit.is_extended:
+                fingers_extended += 1
+
         # Extract hand data
         return {
             "hand_position": {
-                "x": hand.palm_position.x,
-                "y": hand.palm_position.y,
-                "z": hand.palm_position.z
+                "x": hand.palm.position.x,
+                "y": hand.palm.position.y,
+                "z": hand.palm.position.z
             },
-            "hand_velocity": hand.palm_velocity.magnitude,
+            "hand_velocity": velocity_magnitude,
             "palm_normal": {
-                "x": hand.palm_normal.x,
-                "y": hand.palm_normal.y,
-                "z": hand.palm_normal.z
+                "x": hand.palm.normal.x,
+                "y": hand.palm.normal.y,
+                "z": hand.palm.normal.z
             },
-            "confidence": hand.confidence,
-            "fingers_extended": sum(1 for finger in hand.fingers if finger.is_extended)
+            "confidence": 1.0,  # LeapC doesn't provide confidence directly
+            "fingers_extended": fingers_extended
         }
     
     def detect_gesture(self, frame_data: Dict[str, Any]) -> str:
@@ -280,12 +304,23 @@ class LeapMotionServer:
     
     async def run(self):
         """Run the MCP server"""
-        async with stdio_server() as (read_stream, write_stream):
-            await self.server.run(
-                read_stream,
-                write_stream,
-                self.server.create_initialization_options()
-            )
+        # Open the Leap Motion connection if available
+        if self.connection:
+            self.connection.open()
+            logger.info("Leap Motion connection opened")
+
+        try:
+            async with stdio_server() as (read_stream, write_stream):
+                await self.server.run(
+                    read_stream,
+                    write_stream,
+                    self.server.create_initialization_options()
+                )
+        finally:
+            # Clean up Leap Motion connection
+            if self.connection:
+                self.connection.close()
+                logger.info("Leap Motion connection closed")
 
 async def main():
     server = LeapMotionServer()
