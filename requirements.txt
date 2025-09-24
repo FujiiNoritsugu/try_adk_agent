@@ -15,3 +15,7 @@ pygame
 
 # Other Dependencies
 numpy
+
+# HTTP Server for Leap Motion
+fastapi
+uvicorn
