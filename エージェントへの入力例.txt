@@ -12,3 +12,6 @@ Arduinoを初期化してください。IPアドレスは192.168.43.166です
 喜び4、楽しさ3、怒り0、悲しみ1の感情で振動パターンを生成して実行してください
 
 docker run --rm -p '127.0.0.1:50021:50021' voicevox/voicevox_engine:cpu-latest
+
+cd /opt/ultraleap-hand-tracking-control-panel/
+./ultraleap-hand-tracking-control-panel
