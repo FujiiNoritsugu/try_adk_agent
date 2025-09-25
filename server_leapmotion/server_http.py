@@ -7,9 +7,11 @@ import logging
 from typing import Optional, Dict, Any
 import numpy as np
 import uvicorn
+import time
+from datetime import datetime
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging - set to DEBUG for more details
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Try to import Leap Motion library
@@ -44,10 +46,32 @@ class LeapListener(leap.Listener):
     def __init__(self):
         super().__init__()
         self.latest_frame = None
+        self.frame_count = 0
+        self.last_hand_count = 0
+        logger.info("LeapListener initialized")
 
     def on_tracking_event(self, event):
         """Store the latest tracking frame"""
         self.latest_frame = event
+        self.frame_count += 1
+        
+        # Debug logging - log when hand count changes or every 100 frames
+        current_hand_count = len(event.hands) if event.hands else 0
+        if current_hand_count != self.last_hand_count or self.frame_count % 100 == 0:
+            logger.debug(f"Tracking event #{self.frame_count}: {current_hand_count} hand(s) detected")
+            if current_hand_count > 0:
+                for i, hand in enumerate(event.hands):
+                    pos = hand.palm.position
+                    logger.debug(f"  Hand {i}: pos=({pos.x:.1f}, {pos.y:.1f}, {pos.z:.1f})")
+            self.last_hand_count = current_hand_count
+    
+    def on_connection_event(self, event):
+        """Log connection events"""
+        logger.info(f"Connection event: {event}")
+    
+    def on_device_event(self, event):
+        """Log device events"""
+        logger.info(f"Device event: {event}")
 
 class LeapMotionService:
     def __init__(self):
@@ -71,10 +95,21 @@ class LeapMotionService:
             self.listener = LeapListener()
             self.connection = leap.Connection()
             self.connection.add_listener(self.listener)
+            
+            logger.info("Opening Leap Motion connection...")
             self.connection.open()
+            
+            # Wait for connection to establish
+            logger.info("Waiting for Leap Motion connection to establish...")
+            time.sleep(2)
+            
             logger.info("Leap Motion connection initialized and opened")
+            logger.info(f"Connection status: Connected={self.connection is not None}")
+            logger.info(f"Listener status: Active={self.listener is not None}")
         except Exception as e:
             logger.error(f"Failed to initialize Leap Motion: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             self.connection = None
             self.listener = None
 
@@ -205,6 +240,77 @@ async def health_check():
         "leap_available": LEAP_AVAILABLE,
         "leap_connected": service.connection is not None
     }
+
+@app.get("/debug")
+async def debug_info():
+    """Debug endpoint to check Leap Motion state"""
+    debug_data = {
+        "leap_available": LEAP_AVAILABLE,
+        "service_connection": service.connection is not None,
+        "service_listener": service.listener is not None,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    if service.listener:
+        debug_data["listener_frame_exists"] = service.listener.latest_frame is not None
+        debug_data["listener_frame_count"] = service.listener.frame_count
+        debug_data["listener_type"] = type(service.listener).__name__
+        
+        if service.listener.latest_frame:
+            frame = service.listener.latest_frame
+            debug_data["frame_type"] = type(frame).__name__
+            debug_data["frame_has_hands"] = hasattr(frame, 'hands') and frame.hands is not None
+            if hasattr(frame, 'hands') and frame.hands:
+                debug_data["num_hands"] = len(frame.hands)
+                # Add first hand details
+                if len(frame.hands) > 0:
+                    hand = frame.hands[0]
+                    debug_data["first_hand_position"] = {
+                        "x": hand.palm.position.x,
+                        "y": hand.palm.position.y,
+                        "z": hand.palm.position.z
+                    }
+            else:
+                debug_data["num_hands"] = 0
+    
+    # Try to get data using the service method
+    try:
+        frame_data = service.get_current_frame()
+        debug_data["get_current_frame_result"] = frame_data is not None
+        if frame_data:
+            debug_data["frame_data_keys"] = list(frame_data.keys())
+    except Exception as e:
+        debug_data["get_current_frame_error"] = str(e)
+    
+    return debug_data
+
+@app.get("/leap")
+async def get_leap_simple():
+    """Simplified endpoint that returns raw hand data if available"""
+    if not LEAP_AVAILABLE:
+        return {"error": "Leap Motion not available", "hands": []}
+    
+    if not service.listener or not service.listener.latest_frame:
+        return {"hands": [], "message": "No frame data available"}
+    
+    frame = service.listener.latest_frame
+    if not hasattr(frame, 'hands') or not frame.hands:
+        return {"hands": [], "message": "No hands in frame"}
+    
+    hands_data = []
+    for hand in frame.hands:
+        hand_data = {
+            "position": {
+                "x": hand.palm.position.x,
+                "y": hand.palm.position.y,
+                "z": hand.palm.position.z
+            },
+            "velocity": (hand.palm.velocity.x**2 + hand.palm.velocity.y**2 + hand.palm.velocity.z**2) ** 0.5,
+            "confidence": 1.0
+        }
+        hands_data.append(hand_data)
+    
+    return {"hands": hands_data}
 
 @app.get("/leap-data")
 async def get_leap_motion_data():
