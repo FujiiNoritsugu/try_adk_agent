@@ -103,18 +103,25 @@ class LeapMotionService:
             self.connection.add_listener(self.listener)
             
             logger.info("Opening Leap Motion connection...")
-            self.connection.open()
             
             # CRITICAL: Start the connection's event loop in a separate thread
-            # This is necessary for receiving events
+            # Using blocking context manager like in tracking_event_example.py
             def run_leap_loop():
                 logger.info("Starting Leap Motion event loop thread...")
                 try:
-                    # Keep the connection alive and processing events
-                    while self.connection:
-                        time.sleep(0.1)
+                    with self.connection.open():
+                        logger.info("Leap Motion connection opened successfully")
+                        # Set tracking mode to Desktop for better detection
+                        self.connection.set_tracking_mode(leap.TrackingMode.Desktop)
+                        logger.info("Set tracking mode to Desktop")
+                        
+                        # Keep the connection alive and processing events
+                        while self.connection:
+                            time.sleep(0.1)
                 except Exception as e:
                     logger.error(f"Leap loop error: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
             
             self.connection_thread = threading.Thread(target=run_leap_loop, daemon=True)
             self.connection_thread.start()
@@ -123,9 +130,10 @@ class LeapMotionService:
             logger.info("Waiting for Leap Motion connection to establish...")
             time.sleep(3)
             
-            logger.info("Leap Motion connection initialized and opened")
+            logger.info("Leap Motion connection initialized")
             logger.info(f"Connection status: Connected={self.listener.is_connected}")
             logger.info(f"Device status: HasDevice={self.listener.has_device}")
+            logger.info(f"Frame count after wait: {self.listener.frame_count}")
         except Exception as e:
             logger.error(f"Failed to initialize Leap Motion: {e}")
             import traceback
