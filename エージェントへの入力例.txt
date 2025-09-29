@@ -15,3 +15,5 @@ docker run --rm -p '127.0.0.1:50021:50021' voicevox/voicevox_engine:cpu-latest
 
 cd /opt/ultraleap-hand-tracking-control-panel/
 ./ultraleap-hand-tracking-control-panel
+
+python test_leap_http_updated.py http://192.168.43.162:8001
