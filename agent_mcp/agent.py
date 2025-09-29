@@ -112,3 +112,9 @@ root_agent = Agent(
 
 # ADKフレームワーク用のエクスポート
 agent = root_agent
+
+# 注意: Leap Motion HTTPサーバーを使用する場合は、agent_with_leap_http.pyを使用してください
+# 使用方法:
+# 1. 別PCでLeap Motion HTTPサーバーを起動: python server_leapmotion/server_http.py --host 0.0.0.0
+# 2. 環境変数を設定: export LEAP_MOTION_SERVER_URL=http://[別PCのIP]:8001
+# 3. agent_with_leap_http.pyを使用するように変更
