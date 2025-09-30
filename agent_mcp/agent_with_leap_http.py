@@ -50,22 +50,28 @@ class TouchInput(BaseModel):
 
 class LeapMotionHTTPAgent(Agent):
     """Leap Motion HTTPサーバーと連携するエージェント"""
-    
+
     def __init__(self, *args, **kwargs):
         # Leap Motion関連の設定を抽出
-        self.leap_server_url = kwargs.pop('leap_server_url', os.getenv("LEAP_MOTION_SERVER_URL", "http://localhost:8001"))
-        self.leap_enabled = kwargs.pop('leap_enabled', True)
-        self.leap_poll_interval = kwargs.pop('leap_poll_interval', 0.1)
-        self.leap_min_process_interval = kwargs.pop('leap_min_process_interval', 0.5)
-        
+        leap_server_url = kwargs.pop('leap_server_url', os.getenv("LEAP_MOTION_SERVER_URL", "http://localhost:8001"))
+        leap_enabled = kwargs.pop('leap_enabled', True)
+        leap_poll_interval = kwargs.pop('leap_poll_interval', 0.1)
+        leap_min_process_interval = kwargs.pop('leap_min_process_interval', 0.5)
+
         # 親クラスの初期化
         super().__init__(*args, **kwargs)
-        
+
+        # Leap Motion関連の設定をPydanticの制約を回避して設定
+        object.__setattr__(self, 'leap_server_url', leap_server_url)
+        object.__setattr__(self, 'leap_enabled', leap_enabled)
+        object.__setattr__(self, 'leap_poll_interval', leap_poll_interval)
+        object.__setattr__(self, 'leap_min_process_interval', leap_min_process_interval)
+
         # Leap Motionポーリング用の属性
-        self.polling_thread = None
-        self.is_polling = False
-        self.last_processed_time = None
-        
+        object.__setattr__(self, 'polling_thread', None)
+        object.__setattr__(self, 'is_polling', False)
+        object.__setattr__(self, 'last_processed_time', None)
+
         # Leap Motionポーリングを自動開始
         if self.leap_enabled:
             self.start_leap_polling()
@@ -73,14 +79,14 @@ class LeapMotionHTTPAgent(Agent):
     def start_leap_polling(self):
         """Leap Motionポーリングを開始"""
         if not self.is_polling:
-            self.is_polling = True
-            self.polling_thread = threading.Thread(target=self._polling_loop, daemon=True)
+            object.__setattr__(self, 'is_polling', True)
+            object.__setattr__(self, 'polling_thread', threading.Thread(target=self._polling_loop, daemon=True))
             self.polling_thread.start()
             logger.info(f"Started Leap Motion polling from {self.leap_server_url}")
     
     def stop_leap_polling(self):
         """Leap Motionポーリングを停止"""
-        self.is_polling = False
+        object.__setattr__(self, 'is_polling', False)
         if self.polling_thread:
             self.polling_thread.join(timeout=2.0)
         logger.info("Stopped Leap Motion polling")
@@ -129,8 +135,8 @@ class LeapMotionHTTPAgent(Agent):
                                     logger.info(f"Agent response: {result}")
                                 except Exception as e:
                                     logger.error(f"Error processing agent input: {e}")
-                                
-                                self.last_processed_time = current_time
+
+                                object.__setattr__(self, 'last_processed_time', current_time)
                     
                     # 短い間隔でポーリング
                     await asyncio.sleep(self.leap_poll_interval)
