@@ -151,57 +151,14 @@ class LeapMotionHTTPAgent(Agent):
 with open("prompt/system_prompt", "r", encoding="utf-8") as f:
     system_prompt = f.read()
 
-# MCPサーバーの接続設定
-# 絵文字用MCPサーバー
-emoji_mcp_params = StdioConnectionParams(
-    server_params=StdioServerParameters(
-        command="python",
-        args=["mcp_servers/emoji_server.py"],
-    ),
-    timeout=30.0,
-)
-
-# 振動制御用MCPサーバー
-vibration_mcp_params = StdioConnectionParams(
-    server_params=StdioServerParameters(
-        command="python",
-        args=["mcp_servers/vibration_server.py"],
-    ),
-    timeout=30.0,
-)
-
-# VOICEVOX用MCPサーバー
-voicevox_mcp_params = StdioConnectionParams(
-    server_params=StdioServerParameters(
-        command="python",
-        args=["mcp_servers/voicevox_server.py"],
-    ),
-    timeout=30.0,
-)
-
-# MCPToolsetの作成
-emoji_toolset = MCPToolset(
-    connection_params=emoji_mcp_params,
-    tool_filter=["add_emoji"],
-)
-
-vibration_toolset = MCPToolset(
-    connection_params=vibration_mcp_params,
-    tool_filter=["generate_vibration_pattern", "control_vibration", "initialize_arduino", "send_arduino_vibration"],
-)
-
-voicevox_toolset = MCPToolset(
-    connection_params=voicevox_mcp_params,
-    tool_filter=["text_to_speech", "set_speaker", "get_speakers"],
-)
-
 # エージェントの定義（カスタムクラスを使用）
+# LeapMotion入力確認用にMCPツールセットを省略
 root_agent = LeapMotionHTTPAgent(
     name="emotion_agent",
     model="gemini-1.5-flash",
-    description="触覚を通じて感情を検出し応答するエージェント",
+    description="Leap Motionからの入力を受け取り感情を検出し応答するエージェント",
     instruction=system_prompt,
-    tools=[emoji_toolset, vibration_toolset, voicevox_toolset],
+    tools=[],  # MCPツールセットを全て削除
     input_schema=TouchInput,
     # Leap Motion specific settings
     leap_server_url=os.getenv("LEAP_MOTION_SERVER_URL", "http://localhost:8001"),
