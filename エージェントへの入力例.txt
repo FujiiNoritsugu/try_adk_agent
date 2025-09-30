@@ -17,3 +17,5 @@ cd /opt/ultraleap-hand-tracking-control-panel/
 ./ultraleap-hand-tracking-control-panel
 
 python test_leap_http_updated.py http://192.168.43.162:8001
+
+export LEAP_MOTION_SERVER_URL=http://192.168.43.162:8001
