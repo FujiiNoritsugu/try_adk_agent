@@ -10,6 +10,8 @@ import logging
 import os
 import threading
 import time
+import sys
+import json
 from datetime import datetime
 
 load_dotenv()
@@ -159,14 +161,17 @@ class LeapMotionHTTPAgent(Agent):
                                     f"Processing Leap Motion input: {touch_input.gesture_type} at {touch_input.touched_area} (intensity: {touch_input.data})"
                                 )
 
-                                # エージェントのrunメソッドを直接呼び出し
-                                # 注意: これはメインループで実行される
+                                # ADKの標準入力にJSON形式で送信
                                 try:
-                                    # 新しいイベントループで実行
-                                    result = await self.run(touch_input)
-                                    logger.info(f"Agent response: {result}")
+                                    # TouchInputをJSON形式に変換して標準出力に出力
+                                    # ADKフレームワークは標準入力からこの形式を受け取る
+                                    input_json = touch_input.model_dump_json()
+
+                                    # 標準出力に送信（ADKが読み取る）
+                                    print(f"\n[LEAP_MOTION_INPUT] {input_json}", file=sys.stderr, flush=True)
+                                    logger.info(f"Sent input to ADK: {input_json}")
                                 except Exception as e:
-                                    logger.error(f"Error processing agent input: {e}")
+                                    logger.error(f"Error sending input to ADK: {e}")
 
                                 object.__setattr__(
                                     self, "last_processed_time", current_time
@@ -191,20 +196,15 @@ class LeapMotionHTTPAgent(Agent):
 with open("prompt/system_prompt", "r", encoding="utf-8") as f:
     system_prompt = f.read()
 
-# エージェントの定義（カスタムクラスを使用）
-# LeapMotion入力確認用にMCPツールセットを省略
-root_agent = LeapMotionHTTPAgent(
+# エージェントの定義（通常のAgentクラスを使用）
+# Leap Motion入力はleap_to_adk_bridge.pyから標準入力で受け取る
+root_agent = Agent(
     name="emotion_agent",
     model="gemini-1.5-flash",
     description="Leap Motionからの入力を受け取り感情を検出し応答するエージェント",
     instruction=system_prompt,
-    tools=[],  # MCPツールセットを全て削除
+    tools=[],  # MCPツールセットを全て削除（テスト用）
     input_schema=TouchInput,
-    # Leap Motion specific settings
-    leap_server_url=os.getenv("LEAP_MOTION_SERVER_URL", "http://192.168.43.162:8001"),
-    leap_enabled=True,
-    leap_poll_interval=0.1,
-    leap_min_process_interval=0.5,
 )
 
 # ADKフレームワーク用のエクスポート
