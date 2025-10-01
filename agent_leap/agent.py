@@ -36,7 +36,7 @@ with open("prompt/system_prompt", "r", encoding="utf-8") as f:
 # 使用方法: python agent_leap/leap_to_adk_bridge.py | adk run agent_leap
 root_agent = Agent(
     name="emotion_agent",
-    model="gemini-1.5-flash",
+    model="gemini-2.5-flash",
     description="Leap Motionからの入力を受け取り感情を検出し応答するエージェント",
     instruction=system_prompt,
     tools=[],  # MCPツールセットを全て削除（テスト用）

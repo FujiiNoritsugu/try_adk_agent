@@ -168,7 +168,11 @@ class LeapMotionHTTPAgent(Agent):
                                     input_json = touch_input.model_dump_json()
 
                                     # 標準出力に送信（ADKが読み取る）
-                                    print(f"\n[LEAP_MOTION_INPUT] {input_json}", file=sys.stderr, flush=True)
+                                    print(
+                                        f"\n[LEAP_MOTION_INPUT] {input_json}",
+                                        file=sys.stderr,
+                                        flush=True,
+                                    )
                                     logger.info(f"Sent input to ADK: {input_json}")
                                 except Exception as e:
                                     logger.error(f"Error sending input to ADK: {e}")
@@ -200,7 +204,7 @@ with open("prompt/system_prompt", "r", encoding="utf-8") as f:
 # Leap Motion入力はleap_to_adk_bridge.pyから標準入力で受け取る
 root_agent = Agent(
     name="emotion_agent",
-    model="gemini-1.5-flash",
+    model="gemini-2.5-flash",
     description="Leap Motionからの入力を受け取り感情を検出し応答するエージェント",
     instruction=system_prompt,
     tools=[],  # MCPツールセットを全て削除（テスト用）
