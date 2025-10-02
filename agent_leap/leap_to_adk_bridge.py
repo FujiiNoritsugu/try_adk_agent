@@ -60,10 +60,12 @@ class TouchInput:
 
 
 async def poll_leap_motion(leap_server_url: str, poll_interval: float = 0.5,
-                           min_process_interval: float = 0.5):
+                           min_process_interval: float = 1.0):
     """Leap Motionサーバーをポーリングし、データをADKに送信"""
 
     last_processed_time = None
+    last_gesture = None
+    last_touched_area = None
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
         logger.info(f"Starting Leap Motion polling from {leap_server_url}")
@@ -80,16 +82,22 @@ async def poll_leap_motion(leap_server_url: str, poll_interval: float = 0.5,
                     if (not data.get("mock", False) and
                         data.get("gesture_type") != "none"):
 
-                        # 最小間隔チェック
+                        current_gesture = data.get("gesture_type")
+                        current_area = data.get("touched_area", "空中")
+
+                        # 最小間隔チェック + 前回と異なるジェスチャーまたはエリアの場合のみ処理
                         current_time = datetime.now()
-                        if (last_processed_time is None or
-                            (current_time - last_processed_time).total_seconds() >= min_process_interval):
+                        is_different = (current_gesture != last_gesture or current_area != last_touched_area)
+                        is_time_elapsed = (last_processed_time is None or
+                            (current_time - last_processed_time).total_seconds() >= min_process_interval)
+
+                        if is_different and is_time_elapsed:
 
                             # TouchInput形式に変換
                             touch_input = TouchInput(
                                 data=data.get("data", 0.5),
-                                touched_area=data.get("touched_area", "空中"),
-                                gesture_type=data.get("gesture_type"),
+                                touched_area=current_area,
+                                gesture_type=current_gesture,
                                 hand_position=(
                                     data.get("raw_leap_data", {}).get("hand_position")
                                     if data.get("raw_leap_data") else None
@@ -106,10 +114,16 @@ async def poll_leap_motion(leap_server_url: str, poll_interval: float = 0.5,
 
                             # ADKの標準入力形式でJSON出力
                             output = json.dumps(touch_input.to_dict(), ensure_ascii=False)
-                            print(output, flush=True)  # 標準出力に送信
+                            try:
+                                print(output, flush=True)  # 標準出力に送信
+                                logger.info(f"Sent to ADK: {touch_input.gesture_type} at {touch_input.touched_area}")
+                            except BrokenPipeError:
+                                logger.info("ADK process terminated, shutting down bridge...")
+                                break
 
-                            logger.info(f"Sent to ADK: {touch_input.gesture_type} at {touch_input.touched_area}")
                             last_processed_time = current_time
+                            last_gesture = current_gesture
+                            last_touched_area = current_area
 
                 # 短い間隔でポーリング
                 await asyncio.sleep(poll_interval)
@@ -121,6 +135,9 @@ async def poll_leap_motion(leap_server_url: str, poll_interval: float = 0.5,
                 await asyncio.sleep(1)  # エラー時は少し長めに待機
             except KeyboardInterrupt:
                 logger.info("Shutting down...")
+                break
+            except BrokenPipeError:
+                logger.info("ADK process terminated, shutting down bridge...")
                 break
             except Exception as e:
                 logger.error(f"Unexpected error: {e}")
@@ -139,7 +156,7 @@ def main():
 
     leap_server_url = args.url
     poll_interval = float(os.getenv("LEAP_POLL_INTERVAL", "0.5"))
-    min_process_interval = float(os.getenv("LEAP_MIN_PROCESS_INTERVAL", "0.5"))
+    min_process_interval = float(os.getenv("LEAP_MIN_PROCESS_INTERVAL", "1.0"))
 
     logger.info("=" * 60)
     logger.info("Leap Motion to ADK Bridge")
