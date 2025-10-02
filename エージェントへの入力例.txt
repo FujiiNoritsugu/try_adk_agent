@@ -26,5 +26,4 @@ export LEAP_MOTION_SERVER_URL="http://192.168.43.162:8001"
 # ブリッジとエージェントをパイプで接続して起動
 python agent_leap/leap_to_adk_bridge.py | adk run agent_leap
 
-python agent_leap/leap_to_adk_bridge.py --url http://192.168.43.162:8001 |
-   adk run agent_leap
+python agent_leap/leap_to_adk_bridge.py --url http://192.168.43.162:8001 | adk run agent_leap

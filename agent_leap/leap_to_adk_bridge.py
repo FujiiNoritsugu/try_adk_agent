@@ -25,6 +25,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# httpxのログを無効化（HTTP requestログを非表示）
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 
 class TouchInput:
     """ADKに送信するTouchInputデータ"""
@@ -56,7 +59,7 @@ class TouchInput:
         return result
 
 
-async def poll_leap_motion(leap_server_url: str, poll_interval: float = 0.1,
+async def poll_leap_motion(leap_server_url: str, poll_interval: float = 0.5,
                            min_process_interval: float = 0.5):
     """Leap Motionサーバーをポーリングし、データをADKに送信"""
 
@@ -135,7 +138,7 @@ def main():
     args = parser.parse_args()
 
     leap_server_url = args.url
-    poll_interval = float(os.getenv("LEAP_POLL_INTERVAL", "0.1"))
+    poll_interval = float(os.getenv("LEAP_POLL_INTERVAL", "0.5"))
     min_process_interval = float(os.getenv("LEAP_MIN_PROCESS_INTERVAL", "0.5"))
 
     logger.info("=" * 60)
