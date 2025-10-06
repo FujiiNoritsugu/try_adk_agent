@@ -4,7 +4,14 @@ from google.adk.tools.mcp_tool.mcp_session_manager import StdioServerParameters
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from typing import Optional, Dict
+import warnings
+import logging
 
+# Suppress experimental feature warnings
+warnings.filterwarnings("ignore", message=".*EXPERIMENTAL.*")
+
+# Suppress MCP server INFO logs
+logging.getLogger("mcp.server.lowlevel.server").setLevel(logging.WARNING)
 
 load_dotenv()
 

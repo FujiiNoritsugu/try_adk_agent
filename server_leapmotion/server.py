@@ -15,8 +15,9 @@ from typing import Optional, Dict, Any
 import numpy as np
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
+logging.getLogger("mcp.server.lowlevel.server").setLevel(logging.WARNING)
 
 # Try to import Leap Motion library
 try:
@@ -26,6 +27,7 @@ try:
 except ImportError:
     logger.warning("Leap Motion SDK not found. Install with: pip install leapmotion")
     LEAP_AVAILABLE = False
+    leap = None  # Define leap as None to avoid NameError
 
 class LeapMotionData(BaseModel):
     """Structure for Leap Motion sensor data"""
@@ -36,15 +38,21 @@ class LeapMotionData(BaseModel):
     palm_normal: Dict[str, float] = Field(description="Palm normal vector")
     fingers_extended: int = Field(description="Number of extended fingers")
 
-class LeapListener(leap.Listener):
-    """Leap Motion event listener"""
-    def __init__(self):
-        super().__init__()
-        self.latest_frame = None
+if LEAP_AVAILABLE:
+    class LeapListener(leap.Listener):
+        """Leap Motion event listener"""
+        def __init__(self):
+            super().__init__()
+            self.latest_frame = None
 
-    def on_tracking_event(self, event):
-        """Store the latest tracking frame"""
-        self.latest_frame = event
+        def on_tracking_event(self, event):
+            """Store the latest tracking frame"""
+            self.latest_frame = event
+else:
+    class LeapListener:
+        """Dummy Leap Motion listener when SDK is not available"""
+        def __init__(self):
+            self.latest_frame = None
 
 class LeapMotionServer:
     def __init__(self):
