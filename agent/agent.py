@@ -18,23 +18,18 @@ class TouchInput(BaseModel):
         le=1.0,
     )
     touched_area: str = Field(description="触られた体の部位")
-    
+
     # Leap Motion拡張フィールド（オプション）
     gesture_type: Optional[str] = Field(
         default=None,
-        description="Leap Motionで検出されたジェスチャータイプ（swipe, circle, tap, grab, pinch）"
+        description="Leap Motionで検出されたジェスチャータイプ（swipe, circle, tap, grab, pinch）",
     )
     hand_position: Optional[Dict[str, float]] = Field(
-        default=None,
-        description="手の3D位置座標（x, y, z）"
+        default=None, description="手の3D位置座標（x, y, z）"
     )
-    hand_velocity: Optional[float] = Field(
-        default=None,
-        description="手の移動速度"
-    )
+    hand_velocity: Optional[float] = Field(default=None, description="手の移動速度")
     leap_confidence: Optional[float] = Field(
-        default=None,
-        description="Leap Motionの検出信頼度（0-1）"
+        default=None, description="Leap Motionの検出信頼度（0-1）"
     )
 
 
@@ -101,20 +96,15 @@ leapmotion_toolset = MCPToolset(
 )
 
 # エージェントの定義
+# Arduino、VOICEVOX、Leap Motionの全てと連携
 root_agent = Agent(
     name="emotion_agent",
-    model="gemini-1.5-flash",
-    description="触覚を通じて感情を検出し応答するエージェント",
+    model="gemini-2.5-flash",
+    description="Arduino振動、VOICEVOX音声、Leap Motion入力を統合した感情応答エージェント",
     instruction=system_prompt,
-    tools=[emoji_toolset, vibration_toolset, voicevox_toolset, leapmotion_toolset],  # 全てのMCPツールセットを使用
+    tools=[emoji_toolset, vibration_toolset, voicevox_toolset, leapmotion_toolset],
     input_schema=TouchInput,
 )
 
 # ADKフレームワーク用のエクスポート
 agent = root_agent
-
-# 注意: Leap Motion HTTPサーバーを使用する場合は、agent_with_leap_http.pyを使用してください
-# 使用方法:
-# 1. 別PCでLeap Motion HTTPサーバーを起動: python server_leapmotion/server_http.py --host 0.0.0.0
-# 2. 環境変数を設定: export LEAP_MOTION_SERVER_URL=http://[別PCのIP]:8001
-# 3. agent_with_leap_http.pyを使用するように変更
