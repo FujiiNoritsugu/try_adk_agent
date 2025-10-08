@@ -81,6 +81,15 @@ leapmotion_mcp_params = StdioConnectionParams(
     timeout=30.0,
 )
 
+# Vector Search用MCPサーバー
+vectorsearch_mcp_params = StdioConnectionParams(
+    server_params=StdioServerParameters(
+        command="python",
+        args=["mcp_servers/vectorsearch_server.py"],
+    ),
+    timeout=30.0,
+)
+
 # MCPToolsetの作成
 emoji_toolset = MCPToolset(
     connection_params=emoji_mcp_params,
@@ -102,14 +111,19 @@ leapmotion_toolset = MCPToolset(
     tool_filter=["get_leap_motion_data", "convert_to_touch", "set_gesture_mapping"],
 )
 
+vectorsearch_toolset = MCPToolset(
+    connection_params=vectorsearch_mcp_params,
+    tool_filter=["search_similar_interactions", "save_interaction", "get_interaction_stats"],
+)
+
 # エージェントの定義
-# Arduino、VOICEVOX、Leap Motionの全てと連携
+# Arduino、VOICEVOX、Leap Motion、Vector Searchの全てと連携
 root_agent = Agent(
     name="emotion_agent",
     model="gemini-2.5-flash",
-    description="Arduino振動、VOICEVOX音声、Leap Motion入力を統合した感情応答エージェント",
+    description="Arduino振動、VOICEVOX音声、Leap Motion入力、感情履歴検索を統合した感情応答エージェント",
     instruction=system_prompt,
-    tools=[emoji_toolset, vibration_toolset, voicevox_toolset, leapmotion_toolset],
+    tools=[emoji_toolset, vibration_toolset, voicevox_toolset, leapmotion_toolset, vectorsearch_toolset],
     input_schema=TouchInput,
 )
 

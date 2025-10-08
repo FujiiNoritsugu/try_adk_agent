@@ -6,6 +6,9 @@ mcp
 pydantic
 python-dotenv
 
+# GCP Vector Search & Embeddings
+google-cloud-aiplatform
+
 # Arduino Communication
 pyserial
 requests
