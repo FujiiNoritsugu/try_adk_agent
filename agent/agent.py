@@ -46,40 +46,40 @@ with open("prompt/system_prompt", "r", encoding="utf-8") as f:
 
 # MCPサーバーの接続設定
 # 絵文字用MCPサーバー
-emoji_mcp_params = StdioConnectionParams(
-    server_params=StdioServerParameters(
-        command="python",
-        args=["mcp_servers/emoji_server.py"],
-    ),
-    timeout=30.0,
-)
+# emoji_mcp_params = StdioConnectionParams(
+#     server_params=StdioServerParameters(
+#         command="python",
+#         args=["mcp_servers/emoji_server.py"],
+#     ),
+#     timeout=30.0,
+# )
 
 # 振動制御用MCPサーバー
-vibration_mcp_params = StdioConnectionParams(
-    server_params=StdioServerParameters(
-        command="python",
-        args=["mcp_servers/vibration_server.py"],
-    ),
-    timeout=30.0,
-)
+# vibration_mcp_params = StdioConnectionParams(
+#     server_params=StdioServerParameters(
+#         command="python",
+#         args=["mcp_servers/vibration_server.py"],
+#     ),
+#     timeout=30.0,
+# )
 
 # VOICEVOX用MCPサーバー
-voicevox_mcp_params = StdioConnectionParams(
-    server_params=StdioServerParameters(
-        command="python",
-        args=["mcp_servers/voicevox_server.py"],
-    ),
-    timeout=30.0,
-)
+# voicevox_mcp_params = StdioConnectionParams(
+#     server_params=StdioServerParameters(
+#         command="python",
+#         args=["mcp_servers/voicevox_server.py"],
+#     ),
+#     timeout=30.0,
+# )
 
 # Leap Motion用MCPサーバー
-leapmotion_mcp_params = StdioConnectionParams(
-    server_params=StdioServerParameters(
-        command="python",
-        args=["server_leapmotion/server.py"],
-    ),
-    timeout=30.0,
-)
+# leapmotion_mcp_params = StdioConnectionParams(
+#     server_params=StdioServerParameters(
+#         command="python",
+#         args=["server_leapmotion/server.py"],
+#     ),
+#     timeout=30.0,
+# )
 
 # Vector Search用MCPサーバー
 vectorsearch_mcp_params = StdioConnectionParams(
@@ -91,25 +91,25 @@ vectorsearch_mcp_params = StdioConnectionParams(
 )
 
 # MCPToolsetの作成
-emoji_toolset = MCPToolset(
-    connection_params=emoji_mcp_params,
-    tool_filter=["add_emoji"],
-)
+# emoji_toolset = MCPToolset(
+#     connection_params=emoji_mcp_params,
+#     tool_filter=["add_emoji"],
+# )
 
-vibration_toolset = MCPToolset(
-    connection_params=vibration_mcp_params,
-    tool_filter=["generate_vibration_pattern", "control_vibration", "initialize_arduino", "send_arduino_vibration"],
-)
+# vibration_toolset = MCPToolset(
+#     connection_params=vibration_mcp_params,
+#     tool_filter=["generate_vibration_pattern", "control_vibration", "initialize_arduino", "send_arduino_vibration"],
+# )
 
-voicevox_toolset = MCPToolset(
-    connection_params=voicevox_mcp_params,
-    tool_filter=["text_to_speech", "set_speaker", "get_speakers"],
-)
+# voicevox_toolset = MCPToolset(
+#     connection_params=voicevox_mcp_params,
+#     tool_filter=["text_to_speech", "set_speaker", "get_speakers"],
+# )
 
-leapmotion_toolset = MCPToolset(
-    connection_params=leapmotion_mcp_params,
-    tool_filter=["get_leap_motion_data", "convert_to_touch", "set_gesture_mapping"],
-)
+# leapmotion_toolset = MCPToolset(
+#     connection_params=leapmotion_mcp_params,
+#     tool_filter=["get_leap_motion_data", "convert_to_touch", "set_gesture_mapping"],
+# )
 
 vectorsearch_toolset = MCPToolset(
     connection_params=vectorsearch_mcp_params,
@@ -117,13 +117,13 @@ vectorsearch_toolset = MCPToolset(
 )
 
 # エージェントの定義
-# Arduino、VOICEVOX、Leap Motion、Vector Searchの全てと連携
+# VectorSearchのみと連携（Arduino、VOICEVOX、Leap Motionは無効化）
 root_agent = Agent(
     name="emotion_agent",
     model="gemini-2.5-flash",
-    description="Arduino振動、VOICEVOX音声、Leap Motion入力、感情履歴検索を統合した感情応答エージェント",
+    description="感情履歴検索機能を持つ感情応答エージェント",
     instruction=system_prompt,
-    tools=[emoji_toolset, vibration_toolset, voicevox_toolset, leapmotion_toolset, vectorsearch_toolset],
+    tools=[vectorsearch_toolset],
     input_schema=TouchInput,
 )
 
