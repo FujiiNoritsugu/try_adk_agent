@@ -5,8 +5,8 @@
 set -e
 
 # Configuration
-PROJECT_ID="${GOOGLE_CLOUD_PROJECT:-your-project-id}"
-REGION="${VECTOR_SEARCH_INDEX_REGION:-us-central1}"
+PROJECT_ID="your-project-id"  # Replace with your GCP project ID or set via env variable
+REGION="your-region"       # e.g., us-central1
 INDEX_NAME="emotion-history-index"
 INDEX_DISPLAY_NAME="Emotion History Index"
 ENDPOINT_DISPLAY_NAME="Emotion History Endpoint"
@@ -51,7 +51,7 @@ gsutil mb -l "$REGION" "gs://$BUCKET_NAME" 2>/dev/null || echo "Bucket already e
 
 # Create Vector Search Index
 echo "Creating Vector Search Index..."
-INDEX_ID=$(gcloud ai indexes create \
+CREATE_OUTPUT=$(gcloud ai indexes create \
   --display-name="$INDEX_DISPLAY_NAME" \
   --description="Index for storing emotion history interactions" \
   --region="$REGION" \
@@ -62,6 +62,7 @@ INDEX_ID=$(gcloud ai indexes create \
     "dimensions": $DIMENSIONS,
     "approximateNeighborsCount": 10,
     "distanceMeasureType": "COSINE_DISTANCE",
+    "shardSize": "SHARD_SIZE_SMALL",
     "algorithmConfig": {
       "treeAhConfig": {
         "leafNodeEmbeddingCount": 1000,
@@ -72,9 +73,14 @@ INDEX_ID=$(gcloud ai indexes create \
 }
 EOF
 ) \
-  --format="value(name)" | awk -F'/' '{print $NF}')
+  --format="value(name)")
 
-echo "Index created with ID: $INDEX_ID"
+# Extract index ID and operation ID from output
+INDEX_ID=$(echo "$CREATE_OUTPUT" | awk -F'/' '{print $6}')
+OPERATION_ID=$(echo "$CREATE_OUTPUT" | awk -F'/' '{print $8}')
+
+echo "Index ID: $INDEX_ID"
+echo "Operation ID: $OPERATION_ID"
 
 # Create Index Endpoint
 echo "Creating Index Endpoint..."
@@ -85,17 +91,32 @@ ENDPOINT_ID=$(gcloud ai index-endpoints create \
 
 echo "Endpoint created with ID: $ENDPOINT_ID"
 
-# Wait for index to be created (this can take a few minutes)
-echo "Waiting for index to be ready..."
-for i in {1..30}; do
-    STATE=$(gcloud ai indexes describe "$INDEX_ID" --region="$REGION" --format="value(state)")
-    if [ "$STATE" = "READY" ]; then
-        echo "Index is ready!"
+# Wait for index creation operation to complete
+echo "Waiting for index creation to complete..."
+for i in {1..60}; do
+    STATE=$(gcloud ai operations describe "$OPERATION_ID" \
+        --index="$INDEX_ID" \
+        --region="$REGION" \
+        --format="value(done)" 2>/dev/null || echo "false")
+
+    if [ "$STATE" = "True" ]; then
+        echo "Index creation completed!"
         break
     fi
-    echo "Index state: $STATE (attempt $i/30)"
+    echo "Waiting for operation to complete (attempt $i/60)..."
     sleep 10
 done
+
+# Verify index is ready
+echo "Verifying index status..."
+STATE=$(gcloud ai indexes describe "$INDEX_ID" --region="$REGION" --format="value(state)" 2>/dev/null || echo "UNKNOWN")
+echo "Index state: $STATE"
+
+if [ "$STATE" != "READY" ]; then
+    echo "Warning: Index is not yet ready. Current state: $STATE"
+    echo "You may need to wait longer and check status with:"
+    echo "  gcloud ai indexes describe $INDEX_ID --region=$REGION"
+fi
 
 # Deploy index to endpoint
 echo "Deploying index to endpoint..."
@@ -105,7 +126,7 @@ gcloud ai index-endpoints deploy-index "$ENDPOINT_ID" \
   --index="$INDEX_ID" \
   --deployed-index-id="$DEPLOYED_INDEX_ID" \
   --display-name="Emotion History Deployed Index" \
-  --machine-type="n1-standard-2" \
+  --machine-type="e2-standard-2" \
   --min-replica-count=1 \
   --max-replica-count=2
 
