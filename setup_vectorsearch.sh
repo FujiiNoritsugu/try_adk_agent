@@ -49,15 +49,14 @@ BUCKET_NAME="${PROJECT_ID}-vectorsearch-data"
 echo "Creating GCS bucket: gs://$BUCKET_NAME"
 gsutil mb -l "$REGION" "gs://$BUCKET_NAME" 2>/dev/null || echo "Bucket already exists"
 
-# Create Vector Search Index
-echo "Creating Vector Search Index..."
+# Create Vector Search Index with STREAM_UPDATE
+echo "Creating Vector Search Index with streaming update capability..."
 CREATE_OUTPUT=$(gcloud ai indexes create \
   --display-name="$INDEX_DISPLAY_NAME" \
-  --description="Index for storing emotion history interactions" \
+  --description="Index for storing emotion history interactions with streaming updates" \
   --region="$REGION" \
   --metadata-file=<(cat <<EOF
 {
-  "contentsDeltaUri": "gs://$BUCKET_NAME/initial",
   "config": {
     "dimensions": $DIMENSIONS,
     "approximateNeighborsCount": 10,
@@ -69,7 +68,8 @@ CREATE_OUTPUT=$(gcloud ai indexes create \
         "leafNodesToSearchPercent": 10
       }
     }
-  }
+  },
+  "indexUpdateMethod": "STREAM_UPDATE"
 }
 EOF
 ) \

@@ -11,6 +11,7 @@ from dataclasses import asdict
 
 try:
     from google.cloud import aiplatform
+    from google.cloud import aiplatform_v1
     from google.cloud.aiplatform import MatchingEngineIndex, MatchingEngineIndexEndpoint
     AIPLATFORM_AVAILABLE = True
 except ImportError:
@@ -48,6 +49,7 @@ class VectorSearchClient:
         self.deployed_index_id = deployed_index_id or os.getenv("VECTOR_SEARCH_DEPLOYED_INDEX_ID")
 
         self.index_endpoint = None
+        self.index_client = None
         self.use_mock = False
 
         if not AIPLATFORM_AVAILABLE:
@@ -69,6 +71,12 @@ class VectorSearchClient:
             self.index_endpoint = MatchingEngineIndexEndpoint(
                 index_endpoint_name=f"projects/{self.project_id}/locations/{self.location}/indexEndpoints/{self.endpoint_id}"
             )
+
+            # Initialize Index Service Client for streaming updates
+            self.index_client = aiplatform_v1.IndexServiceClient(
+                client_options={"api_endpoint": f"{self.location}-aiplatform.googleapis.com"}
+            )
+
             logger.info("Vector Search client initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Vector Search: {e}")
@@ -121,7 +129,7 @@ class VectorSearchClient:
 
     def upsert_interaction(self, record: InteractionRecord) -> bool:
         """
-        Insert or update an interaction record
+        Insert or update an interaction record using streaming API
 
         Args:
             record: Interaction record to upsert
@@ -133,23 +141,32 @@ class VectorSearchClient:
             logger.info(f"Mock upsert: {record.id}")
             return True
 
+        if not self.index_client:
+            logger.error("Index client not initialized")
+            return False
+
         try:
-            # In streaming index, upsert via index's update method
-            # Note: This is a simplified example. Actual implementation
-            # would require batch upsert via GCS or streaming API
+            logger.info(f"Upserting interaction via streaming API: {record.id}")
 
-            logger.info(f"Upserting interaction: {record.id}")
+            # Create IndexDatapoint with embedding
+            datapoint = aiplatform_v1.IndexDatapoint(
+                datapoint_id=record.id,
+                feature_vector=record.embedding
+            )
 
-            # Convert record to format expected by Vector Search
-            datapoint = {
-                "id": record.id,
-                "embedding": record.embedding,
-                "metadata": json.dumps(record.to_dict())
-            }
+            # Create the full index resource name
+            index_name = f"projects/{self.project_id}/locations/{self.location}/indexes/{self.index_id}"
 
-            # TODO: Implement actual upsert via streaming API or GCS batch
-            logger.warning("Upsert not fully implemented. Requires streaming API integration.")
+            # Create upsert request
+            upsert_request = aiplatform_v1.UpsertDatapointsRequest(
+                index=index_name,
+                datapoints=[datapoint]
+            )
 
+            # Execute upsert
+            response = self.index_client.upsert_datapoints(request=upsert_request)
+
+            logger.info(f"Successfully upserted interaction: {record.id}")
             return True
 
         except Exception as e:
@@ -186,7 +203,7 @@ class VectorSearchClient:
         Get statistics about stored interactions
 
         Returns:
-            Statistics dictionary
+            Statistics dictionary including total vector count
         """
         if self.use_mock:
             return {
@@ -196,18 +213,38 @@ class VectorSearchClient:
             }
 
         try:
-            # Get index info
-            # Note: Actual implementation would query index stats
+            # Get the MatchingEngineIndex resource to access stats
+            index = MatchingEngineIndex(
+                index_name=f"projects/{self.project_id}/locations/{self.location}/indexes/{self.index_id}"
+            )
+
+            # Access index stats from the underlying GCA resource
+            vectors_count = 0
+            shards_count = 0
+
+            if hasattr(index, '_gca_resource') and index._gca_resource:
+                if hasattr(index._gca_resource, 'index_stats') and index._gca_resource.index_stats:
+                    vectors_count = index._gca_resource.index_stats.vectors_count or 0
+                    shards_count = index._gca_resource.index_stats.shards_count or 0
+
             return {
-                "total_interactions": "unknown",
+                "total_interactions": int(vectors_count) if vectors_count else 0,
+                "vectors_count": int(vectors_count) if vectors_count else 0,
+                "shards_count": shards_count,
                 "mode": "production",
                 "index_configured": True,
                 "index_id": self.index_id,
-                "endpoint_id": self.endpoint_id
+                "endpoint_id": self.endpoint_id,
+                "project_id": self.project_id,
+                "location": self.location
             }
         except Exception as e:
             logger.error(f"Failed to get stats: {e}")
-            return {"error": str(e)}
+            return {
+                "error": str(e),
+                "mode": "production",
+                "index_configured": True
+            }
 
 
 # Example usage
