@@ -5,8 +5,8 @@
 set -e
 
 # Configuration
-PROJECT_ID="your-project-id"  # Replace with your GCP project ID or set via env variable
-REGION="your-region"       # e.g., us-central1
+PROJECT_ID="gen-lang-client-0471694923"  # Replace with your GCP project ID or set via env variable
+REGION="asia-northeast1"       # e.g., us-central1
 INDEX_NAME="emotion-history-index"
 INDEX_DISPLAY_NAME="Emotion History Index"
 ENDPOINT_DISPLAY_NAME="Emotion History Endpoint"
@@ -51,12 +51,14 @@ gsutil mb -l "$REGION" "gs://$BUCKET_NAME" 2>/dev/null || echo "Bucket already e
 
 # Create Vector Search Index with STREAM_UPDATE
 echo "Creating Vector Search Index with streaming update capability..."
-CREATE_OUTPUT=$(gcloud ai indexes create \
+gcloud ai indexes create \
   --display-name="$INDEX_DISPLAY_NAME" \
   --description="Index for storing emotion history interactions with streaming updates" \
   --region="$REGION" \
+  --index-update-method=stream_update \
   --metadata-file=<(cat <<EOF
 {
+  "contentsDeltaUri": "gs://$BUCKET_NAME/initial",
   "config": {
     "dimensions": $DIMENSIONS,
     "approximateNeighborsCount": 10,
@@ -68,42 +70,43 @@ CREATE_OUTPUT=$(gcloud ai indexes create \
         "leafNodesToSearchPercent": 10
       }
     }
-  },
-  "indexUpdateMethod": "STREAM_UPDATE"
+  }
 }
 EOF
-) \
-  --format="value(name)")
+)
 
-# Extract index ID and operation ID from output
-INDEX_ID=$(echo "$CREATE_OUTPUT" | awk -F'/' '{print $6}')
-OPERATION_ID=$(echo "$CREATE_OUTPUT" | awk -F'/' '{print $8}')
+# Get the most recently created index
+echo "Retrieving index information..."
+INDEX_INFO=$(gcloud ai indexes list --region="$REGION" --sort-by="~createTime" --limit=1 --format="value(name)")
+INDEX_ID=$(echo "$INDEX_INFO" | awk -F'/' '{print $NF}')
 
 echo "Index ID: $INDEX_ID"
-echo "Operation ID: $OPERATION_ID"
 
 # Create Index Endpoint
 echo "Creating Index Endpoint..."
-ENDPOINT_ID=$(gcloud ai index-endpoints create \
+gcloud ai index-endpoints create \
   --display-name="$ENDPOINT_DISPLAY_NAME" \
-  --region="$REGION" \
-  --format="value(name)" | awk -F'/' '{print $NF}')
+  --region="$REGION"
+
+# Get the most recently created endpoint
+echo "Retrieving endpoint information..."
+ENDPOINT_INFO=$(gcloud ai index-endpoints list --region="$REGION" --sort-by="~createTime" --limit=1 --format="value(name)")
+ENDPOINT_ID=$(echo "$ENDPOINT_INFO" | awk -F'/' '{print $NF}')
 
 echo "Endpoint created with ID: $ENDPOINT_ID"
 
-# Wait for index creation operation to complete
+# Wait for index creation to complete
 echo "Waiting for index creation to complete..."
 for i in {1..60}; do
-    STATE=$(gcloud ai operations describe "$OPERATION_ID" \
-        --index="$INDEX_ID" \
+    STATE=$(gcloud ai indexes describe "$INDEX_ID" \
         --region="$REGION" \
-        --format="value(done)" 2>/dev/null || echo "false")
+        --format="value(name)" 2>/dev/null)
 
-    if [ "$STATE" = "True" ]; then
-        echo "Index creation completed!"
+    if [ -n "$STATE" ]; then
+        echo "Index is available!"
         break
     fi
-    echo "Waiting for operation to complete (attempt $i/60)..."
+    echo "Waiting for index to be available (attempt $i/60)..."
     sleep 10
 done
 
@@ -120,7 +123,8 @@ fi
 
 # Deploy index to endpoint
 echo "Deploying index to endpoint..."
-DEPLOYED_INDEX_ID="emotion_history_deployed"
+DEPLOYED_INDEX_ID="emotion_history_deployed_$(date +%Y%m%d_%H%M%S)"
+echo "Using deployed index ID: $DEPLOYED_INDEX_ID"
 gcloud ai index-endpoints deploy-index "$ENDPOINT_ID" \
   --region="$REGION" \
   --index="$INDEX_ID" \
