@@ -148,6 +148,43 @@ class EmotionEmbedder:
 
         return text
 
+    def create_search_query_text(self,
+                                 input_data: TouchInput,
+                                 emotion: Emotion) -> str:
+        """
+        Create text representation for search query (without response text)
+
+        Args:
+            input_data: Touch input data
+            emotion: Emotion values
+
+        Returns:
+            Formatted text for search query embedding
+        """
+        # 感情の強度を文字列化
+        dominant_emotion = max(
+            [("joy", emotion.joy), ("fun", emotion.fun),
+             ("anger", emotion.anger), ("sad", emotion.sad)],
+            key=lambda x: x[1]
+        )[0]
+
+        # 強度レベル
+        intensity_level = "弱い" if input_data.data < 0.3 else "中程度" if input_data.data < 0.7 else "強い"
+
+        # Embedding用のテキストを生成（応答テキストなし）
+        text = f"""触覚入力: 部位={input_data.touched_area}, 強度={intensity_level}({input_data.data:.2f})"""
+
+        if input_data.gesture_type:
+            text += f", ジェスチャー={input_data.gesture_type}"
+
+        if input_data.hand_velocity:
+            velocity_desc = "遅い" if input_data.hand_velocity < 100 else "普通" if input_data.hand_velocity < 200 else "速い"
+            text += f", 速度={velocity_desc}"
+
+        text += f"\n感情: {dominant_emotion}が優勢, 喜び={emotion.joy:.1f}, 楽しさ={emotion.fun:.1f}, 怒り={emotion.anger:.1f}, 悲しみ={emotion.sad:.1f}"
+
+        return text
+
     def generate_embedding(self, text: str) -> List[float]:
         """
         Generate embedding vector from text

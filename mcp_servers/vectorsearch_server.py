@@ -70,11 +70,10 @@ async def search_similar_interactions(arguments: SearchSimilarArgs) -> List[Text
     )
 
     # Generate embedding for search query
-    # Use a placeholder response text for query
-    query_text = embedder.create_embedding_text(
+    # Use search-specific method that doesn't include response text
+    query_text = embedder.create_search_query_text(
         touch_input,
-        emotion,
-        "[検索クエリ]"
+        emotion
     )
     query_embedding = embedder.generate_embedding(query_text)
 
