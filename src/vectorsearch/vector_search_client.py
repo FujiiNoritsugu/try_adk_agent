@@ -13,10 +13,13 @@ try:
     from google.cloud import aiplatform
     from google.cloud import aiplatform_v1
     from google.cloud.aiplatform import MatchingEngineIndex, MatchingEngineIndexEndpoint
+
     AIPLATFORM_AVAILABLE = True
 except ImportError:
     AIPLATFORM_AVAILABLE = False
-    logging.warning("AI Platform SDK not installed. Install with: pip install google-cloud-aiplatform")
+    logging.warning(
+        "AI Platform SDK not installed. Install with: pip install google-cloud-aiplatform"
+    )
 
 from .embedder import InteractionRecord
 
@@ -26,12 +29,14 @@ logger = logging.getLogger(__name__)
 class VectorSearchClient:
     """Client for Vector Search operations"""
 
-    def __init__(self,
-                 project_id: Optional[str] = None,
-                 location: Optional[str] = None,
-                 index_id: Optional[str] = None,
-                 endpoint_id: Optional[str] = None,
-                 deployed_index_id: Optional[str] = None):
+    def __init__(
+        self,
+        project_id: Optional[str] = None,
+        location: Optional[str] = None,
+        index_id: Optional[str] = None,
+        endpoint_id: Optional[str] = None,
+        deployed_index_id: Optional[str] = None,
+    ):
         """
         Initialize Vector Search client
 
@@ -43,10 +48,14 @@ class VectorSearchClient:
             deployed_index_id: Deployed Index ID
         """
         self.project_id = project_id or os.getenv("GOOGLE_CLOUD_PROJECT")
-        self.location = location or os.getenv("VECTOR_SEARCH_INDEX_REGION", "us-central1")
+        self.location = location or os.getenv(
+            "VECTOR_SEARCH_INDEX_REGION", "us-central1"
+        )
         self.index_id = index_id or os.getenv("VECTOR_SEARCH_INDEX_ID")
         self.endpoint_id = endpoint_id or os.getenv("VECTOR_SEARCH_ENDPOINT_ID")
-        self.deployed_index_id = deployed_index_id or os.getenv("VECTOR_SEARCH_DEPLOYED_INDEX_ID")
+        self.deployed_index_id = deployed_index_id or os.getenv(
+            "VECTOR_SEARCH_DEPLOYED_INDEX_ID"
+        )
 
         self.index_endpoint = None
         self.index_client = None
@@ -59,7 +68,9 @@ class VectorSearchClient:
 
         if not all([self.project_id, self.index_id, self.endpoint_id]):
             logger.warning("Vector Search not configured. Using mock mode.")
-            logger.warning("Set: GOOGLE_CLOUD_PROJECT, VECTOR_SEARCH_INDEX_ID, VECTOR_SEARCH_ENDPOINT_ID")
+            logger.warning(
+                "Set: GOOGLE_CLOUD_PROJECT, VECTOR_SEARCH_INDEX_ID, VECTOR_SEARCH_ENDPOINT_ID"
+            )
             self.use_mock = True
             return
 
@@ -74,7 +85,9 @@ class VectorSearchClient:
 
             # Initialize Index Service Client for streaming updates
             self.index_client = aiplatform_v1.IndexServiceClient(
-                client_options={"api_endpoint": f"{self.location}-aiplatform.googleapis.com"}
+                client_options={
+                    "api_endpoint": f"{self.location}-aiplatform.googleapis.com"
+                }
             )
 
             logger.info("Vector Search client initialized successfully")
@@ -83,10 +96,9 @@ class VectorSearchClient:
             logger.warning("Falling back to mock mode")
             self.use_mock = True
 
-    def search_similar(self,
-                      query_embedding: List[float],
-                      top_k: int = 5,
-                      threshold: float = 0.7) -> List[Dict]:
+    def search_similar(
+        self, query_embedding: List[float], top_k: int = 5, threshold: float = 0.7
+    ) -> List[Dict]:
         """
         Search for similar interactions
 
@@ -107,18 +119,24 @@ class VectorSearchClient:
             response = self.index_endpoint.find_neighbors(
                 deployed_index_id=self.deployed_index_id,
                 queries=[query_embedding],
-                num_neighbors=top_k
+                num_neighbors=top_k,
             )
 
             results = []
             for neighbor in response[0]:
                 # Filter by threshold
                 if neighbor.distance >= threshold:
-                    results.append({
-                        "id": neighbor.id,
-                        "distance": neighbor.distance,
-                        "metadata": neighbor.metadata if hasattr(neighbor, "metadata") else {}
-                    })
+                    results.append(
+                        {
+                            "id": neighbor.id,
+                            "distance": neighbor.distance,
+                            "metadata": (
+                                neighbor.metadata
+                                if hasattr(neighbor, "metadata")
+                                else {}
+                            ),
+                        }
+                    )
 
             logger.info(f"Found {len(results)} similar interactions")
             return results
@@ -150,8 +168,7 @@ class VectorSearchClient:
 
             # Create IndexDatapoint with embedding
             datapoint = aiplatform_v1.IndexDatapoint(
-                datapoint_id=record.id,
-                feature_vector=record.embedding
+                datapoint_id=record.id, feature_vector=record.embedding
             )
 
             # Create the full index resource name
@@ -159,8 +176,7 @@ class VectorSearchClient:
 
             # Create upsert request
             upsert_request = aiplatform_v1.UpsertDatapointsRequest(
-                index=index_name,
-                datapoints=[datapoint]
+                index=index_name, datapoints=[datapoint]
             )
 
             # Execute upsert
@@ -183,19 +199,23 @@ class VectorSearchClient:
                     "timestamp": "2025-10-09T05:00:00Z",
                     "input": {"touched_area": "頭", "data": 0.6, "gesture_type": "tap"},
                     "emotion": {"joy": 4.0, "fun": 3.0, "anger": 0.5, "sad": 0.3},
-                    "response_text": "優しく頭を触ってくれて嬉しいな"
-                }
+                    "response_text": "優しく頭を触ってくれて嬉しいな",
+                },
             },
             {
                 "id": "interaction_20251009_045500_0002",
                 "distance": 0.78,
                 "metadata": {
                     "timestamp": "2025-10-09T04:55:00Z",
-                    "input": {"touched_area": "頭", "data": 0.4, "gesture_type": "swipe"},
+                    "input": {
+                        "touched_area": "頭",
+                        "data": 0.4,
+                        "gesture_type": "swipe",
+                    },
                     "emotion": {"joy": 3.5, "fun": 2.8, "anger": 0.3, "sad": 0.5},
-                    "response_text": "気持ちいいなぁ...もっと撫でて"
-                }
-            }
+                    "response_text": "気持ちいいなぁ...もっと撫でて",
+                },
+            },
         ]
 
     def get_stats(self) -> Dict:
@@ -206,11 +226,7 @@ class VectorSearchClient:
             Statistics dictionary including total vector count
         """
         if self.use_mock:
-            return {
-                "total_interactions": 42,
-                "mode": "mock",
-                "index_configured": False
-            }
+            return {"total_interactions": 42, "mode": "mock", "index_configured": False}
 
         try:
             # Get the MatchingEngineIndex resource to access stats
@@ -222,8 +238,11 @@ class VectorSearchClient:
             vectors_count = 0
             shards_count = 0
 
-            if hasattr(index, '_gca_resource') and index._gca_resource:
-                if hasattr(index._gca_resource, 'index_stats') and index._gca_resource.index_stats:
+            if hasattr(index, "_gca_resource") and index._gca_resource:
+                if (
+                    hasattr(index._gca_resource, "index_stats")
+                    and index._gca_resource.index_stats
+                ):
                     vectors_count = index._gca_resource.index_stats.vectors_count or 0
                     shards_count = index._gca_resource.index_stats.shards_count or 0
 
@@ -236,21 +255,19 @@ class VectorSearchClient:
                 "index_id": self.index_id,
                 "endpoint_id": self.endpoint_id,
                 "project_id": self.project_id,
-                "location": self.location
+                "location": self.location,
             }
         except Exception as e:
             logger.error(f"Failed to get stats: {e}")
-            return {
-                "error": str(e),
-                "mode": "production",
-                "index_configured": True
-            }
+            return {"error": str(e), "mode": "production", "index_configured": True}
 
 
 # Example usage
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    from dotenv import load_dotenv
 
+    load_dotenv()
     # Create client
     client = VectorSearchClient()
 
@@ -262,7 +279,7 @@ if __name__ == "__main__":
     for i, result in enumerate(results, 1):
         print(f"\n{i}. ID: {result['id']}")
         print(f"   Distance: {result['distance']:.2f}")
-        if 'metadata' in result and 'response_text' in result['metadata']:
+        if "metadata" in result and "response_text" in result["metadata"]:
             print(f"   Response: {result['metadata']['response_text']}")
 
     # Get stats
