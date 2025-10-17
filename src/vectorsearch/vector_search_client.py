@@ -21,7 +21,10 @@ except ImportError:
         "AI Platform SDK not installed. Install with: pip install google-cloud-aiplatform"
     )
 
-from .embedder import InteractionRecord
+try:
+    from .embedder import InteractionRecord
+except ImportError:
+    from vectorsearch.embedder import InteractionRecord
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +126,11 @@ class VectorSearchClient:
             )
 
             results = []
+            # Check if response is empty or has no results
+            if not response or len(response) == 0:
+                logger.info("No results found in vector search (empty index)")
+                return []
+
             for neighbor in response[0]:
                 # Filter by threshold
                 if neighbor.distance >= threshold:
@@ -229,27 +237,21 @@ class VectorSearchClient:
             return {"total_interactions": 42, "mode": "mock", "index_configured": False}
 
         try:
-            # Get the MatchingEngineIndex resource to access stats
-            index = MatchingEngineIndex(
-                index_name=f"projects/{self.project_id}/locations/{self.location}/indexes/{self.index_id}"
-            )
+            # Use direct API call to get most accurate stats
+            index_name = f"projects/{self.project_id}/locations/{self.location}/indexes/{self.index_id}"
+            index_response = self.index_client.get_index(name=index_name)
 
-            # Access index stats from the underlying GCA resource
             vectors_count = 0
             shards_count = 0
 
-            if hasattr(index, "_gca_resource") and index._gca_resource:
-                if (
-                    hasattr(index._gca_resource, "index_stats")
-                    and index._gca_resource.index_stats
-                ):
-                    vectors_count = index._gca_resource.index_stats.vectors_count or 0
-                    shards_count = index._gca_resource.index_stats.shards_count or 0
+            if hasattr(index_response, "index_stats") and index_response.index_stats:
+                vectors_count = index_response.index_stats.vectors_count or 0
+                shards_count = index_response.index_stats.shards_count or 0
 
             return {
-                "total_interactions": int(vectors_count) if vectors_count else 0,
-                "vectors_count": int(vectors_count) if vectors_count else 0,
-                "shards_count": shards_count,
+                "total_interactions": int(vectors_count),
+                "vectors_count": int(vectors_count),
+                "shards_count": int(shards_count),
                 "mode": "production",
                 "index_configured": True,
                 "index_id": self.index_id,
