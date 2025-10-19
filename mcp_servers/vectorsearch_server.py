@@ -13,6 +13,10 @@ from pydantic import BaseModel, Field
 # Add parent directories to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
 from src.vectorsearch.embedder import EmotionEmbedder, TouchInput, Emotion
 from src.vectorsearch.vector_search_client import VectorSearchClient
 

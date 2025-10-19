@@ -79,16 +79,16 @@ class InteractionRecord:
 class EmotionEmbedder:
     """感情履歴のEmbedding生成クラス"""
 
-    def __init__(self, project_id: Optional[str] = None, location: str = "us-central1"):
+    def __init__(self, project_id: Optional[str] = None, location: Optional[str] = None):
         """
         Initialize the embedder
 
         Args:
-            project_id: GCP Project ID (defaults to env var)
-            location: GCP region for Vertex AI
+            project_id: GCP Project ID (defaults to GOOGLE_CLOUD_PROJECT env var)
+            location: GCP region for Vertex AI (defaults to GOOGLE_CLOUD_LOCATION or us-central1)
         """
         self.project_id = project_id or os.getenv("GOOGLE_CLOUD_PROJECT")
-        self.location = location
+        self.location = location or os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
         self.model = None
 
         if not VERTEXAI_AVAILABLE:
@@ -102,7 +102,7 @@ class EmotionEmbedder:
         try:
             # Initialize Vertex AI
             vertexai.init(project=self.project_id, location=self.location)
-            self.model = TextEmbeddingModel.from_pretrained("textembedding-gecko@003")
+            self.model = TextEmbeddingModel.from_pretrained("text-embedding-004")
             logger.info("Vertex AI Text Embedding initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Vertex AI: {e}")
