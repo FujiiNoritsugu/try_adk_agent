@@ -36,3 +36,7 @@ python agent/leap_to_adk_bridge.py --url http://192.168.43.162:8001 | adk run ag
 gcloud auth login
 gcloud config set project gen-lang-client-0471694923
 gcloud auth application-default login
+
+cd src
+python -m vectorsearch.vector_search_client
+

@@ -132,12 +132,16 @@ class VectorSearchClient:
                 return []
 
             for neighbor in response[0]:
+                # Vector Search returns distance (lower is more similar)
+                # Convert to similarity score (0-1, higher is more similar)
+                similarity = 1.0 - neighbor.distance
+
                 # Filter by threshold
-                if neighbor.distance >= threshold:
+                if similarity >= threshold:
                     results.append(
                         {
                             "id": neighbor.id,
-                            "distance": neighbor.distance,
+                            "distance": similarity,  # Store as similarity score
                             "metadata": (
                                 neighbor.metadata
                                 if hasattr(neighbor, "metadata")
