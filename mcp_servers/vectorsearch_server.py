@@ -47,6 +47,18 @@ class SaveInteractionArgs(BaseModel):
     session_id: str = Field(default="", description="セッションID")
 
 
+class CheckPatternMemoryArgs(BaseModel):
+    """Arguments for check_pattern_memory tool"""
+    touched_area: str = Field(description="触られた体の部位")
+    data: float = Field(description="触覚の強度（0-1）", ge=0.0, le=1.0)
+    gesture_type: str = Field(default="", description="ジェスチャータイプ")
+
+
+class GetIntimacyScoreArgs(BaseModel):
+    """Arguments for get_intimacy_score tool"""
+    pass
+
+
 app = Server("vectorsearch-server")
 
 # Initialize embedder and client
@@ -176,6 +188,138 @@ async def get_stats() -> List[TextContent]:
     return [TextContent(type="text", text=json.dumps(stats, ensure_ascii=False, indent=2))]
 
 
+async def check_pattern_memory(arguments: CheckPatternMemoryArgs) -> List[TextContent]:
+    """同じ触れ方パターンが過去にあったかチェック"""
+
+    print(f"[DEBUG] Checking pattern memory for: {arguments.touched_area}", file=sys.stderr)
+
+    # Create TouchInput from arguments
+    touch_input = TouchInput(
+        data=arguments.data,
+        touched_area=arguments.touched_area,
+        gesture_type=arguments.gesture_type if arguments.gesture_type else None
+    )
+
+    # Create search query text (without emotion)
+    query_text = f"触覚入力: 部位={touch_input.touched_area}, 強度={touch_input.data:.2f}"
+    if touch_input.gesture_type:
+        query_text += f", ジェスチャー={touch_input.gesture_type}"
+
+    query_embedding = embedder.generate_embedding(query_text)
+
+    # Search for very similar patterns (high threshold)
+    results = vector_client.search_similar(
+        query_embedding,
+        top_k=10,
+        threshold=0.85  # High similarity threshold for pattern recognition
+    )
+
+    if not results:
+        response = {
+            "remembered": False,
+            "message": "この触れ方は初めてですね",
+            "similar_count": 0
+        }
+    else:
+        # Count matching patterns
+        exact_matches = [r for r in results if r.get("distance", 0) > 0.95]
+        similar_matches = [r for r in results if 0.85 <= r.get("distance", 0) < 0.95]
+
+        # Calculate how many times this pattern occurred
+        total_count = len(results)
+
+        # Extract common response patterns
+        responses = [r.get("response_text", "") for r in results[:3]]
+
+        response = {
+            "remembered": True,
+            "message": f"この触れ方、覚えています！{total_count}回目ですね",
+            "similar_count": total_count,
+            "exact_matches": len(exact_matches),
+            "similar_matches": len(similar_matches),
+            "past_responses": responses,
+            "touched_area": arguments.touched_area,
+            "pattern_familiarity": min(1.0, total_count / 10.0)  # 0-1 scale
+        }
+
+    print(f"[DEBUG] Pattern memory result: remembered={response.get('remembered')}", file=sys.stderr)
+
+    return [TextContent(type="text", text=json.dumps(response, ensure_ascii=False))]
+
+
+async def get_intimacy_score(arguments: GetIntimacyScoreArgs) -> List[TextContent]:
+    """親密度スコアを計算"""
+
+    print(f"[DEBUG] Calculating intimacy score", file=sys.stderr)
+
+    # Get all interactions
+    stats = vector_client.get_stats()
+    total_interactions = stats.get("total_records", 0)
+
+    if total_interactions == 0:
+        response = {
+            "intimacy_score": 0,
+            "intimacy_level": "stranger",
+            "total_interactions": 0,
+            "gentle_ratio": 0.0,
+            "message": "まだ触れ合っていないので、親密度は0です"
+        }
+    else:
+        # Search for recent gentle touches (data < 0.6)
+        # Use a generic query to get recent interactions
+        query_text = "優しい触覚"
+        query_embedding = embedder.generate_embedding(query_text)
+
+        recent_results = vector_client.search_similar(
+            query_embedding,
+            top_k=min(50, total_interactions),
+            threshold=0.0  # Get all recent interactions
+        )
+
+        # Count gentle touches (intensity < 0.6)
+        gentle_count = sum(1 for r in recent_results
+                          if r.get("metadata", {}).get("data", 1.0) < 0.6)
+
+        gentle_ratio = gentle_count / len(recent_results) if recent_results else 0.0
+
+        # Calculate intimacy score (0-100)
+        # Based on: total interactions + gentle ratio
+        base_score = min(50, total_interactions * 2)  # Up to 50 points from interaction count
+        gentleness_bonus = gentle_ratio * 50  # Up to 50 points from gentle touches
+        intimacy_score = int(base_score + gentleness_bonus)
+
+        # Determine intimacy level
+        if intimacy_score < 20:
+            intimacy_level = "stranger"
+            level_description = "まだあまり知らない関係"
+        elif intimacy_score < 40:
+            intimacy_level = "acquaintance"
+            level_description = "少し打ち解けてきた関係"
+        elif intimacy_score < 60:
+            intimacy_level = "friend"
+            level_description = "友達のような関係"
+        elif intimacy_score < 80:
+            intimacy_level = "close_friend"
+            level_description = "親しい友達の関係"
+        else:
+            intimacy_level = "intimate"
+            level_description = "とても親密な関係"
+
+        response = {
+            "intimacy_score": intimacy_score,
+            "intimacy_level": intimacy_level,
+            "level_description": level_description,
+            "total_interactions": total_interactions,
+            "gentle_ratio": round(gentle_ratio, 2),
+            "gentle_count": gentle_count,
+            "message": f"親密度: {intimacy_score}点 ({level_description})"
+        }
+
+    print(f"[DEBUG] Intimacy score: {response.get('intimacy_score')}", file=sys.stderr)
+
+    return [TextContent(type="text", text=json.dumps(response, ensure_ascii=False))]
+
+
 @app.list_tools()
 async def list_tools() -> List[Tool]:
     """List available tools"""
@@ -194,6 +338,16 @@ async def list_tools() -> List[Tool]:
             name="get_interaction_stats",
             description="Vector Searchの統計情報（保存されたインタラクション数など）を取得します。",
             inputSchema={"type": "object", "properties": {}},
+        ),
+        Tool(
+            name="check_pattern_memory",
+            description="同じ触れ方パターンが過去にあったかチェックします。覚えている触れ方なら「覚えています！」と反応できます。",
+            inputSchema=CheckPatternMemoryArgs.model_json_schema(),
+        ),
+        Tool(
+            name="get_intimacy_score",
+            description="現在の親密度スコアを取得します。優しい触れ方の履歴が多いほど親密度が上がります。",
+            inputSchema=GetIntimacyScoreArgs.model_json_schema(),
         )
     ]
 
@@ -209,6 +363,12 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
         return await save_interaction(args)
     elif name == "get_interaction_stats":
         return await get_stats()
+    elif name == "check_pattern_memory":
+        args = CheckPatternMemoryArgs(**arguments)
+        return await check_pattern_memory(args)
+    elif name == "get_intimacy_score":
+        args = GetIntimacyScoreArgs(**arguments)
+        return await get_intimacy_score(args)
     else:
         raise ValueError(f"Unknown tool: {name}")
 
