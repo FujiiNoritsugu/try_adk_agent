@@ -188,6 +188,57 @@ class VibrationPatternGenerator:
             )
 
     @staticmethod
+    def celebration_pattern(success_level: str = "perfect") -> VibrationPattern:
+        """
+        Generate celebration pattern for game success
+
+        Args:
+            success_level: Level of success ("perfect", "good", "close")
+
+        Returns:
+            VibrationPattern for celebration
+        """
+        if success_level == "perfect":
+            # Perfect match - exciting fanfare pattern
+            return VibrationPattern(
+                steps=[
+                    VibrationStep(0.6, 100),
+                    VibrationStep(0.0, 50),
+                    VibrationStep(0.8, 100),
+                    VibrationStep(0.0, 50),
+                    VibrationStep(1.0, 200),
+                    VibrationStep(0.0, 100),
+                    VibrationStep(1.0, 300),
+                ],
+                interval=50,
+                repeat_count=2
+            )
+        elif success_level == "good":
+            # Good match - cheerful pattern
+            return VibrationPattern(
+                steps=[
+                    VibrationStep(0.7, 150),
+                    VibrationStep(0.0, 50),
+                    VibrationStep(0.9, 150),
+                    VibrationStep(0.0, 50),
+                    VibrationStep(0.7, 150),
+                ],
+                interval=40,
+                repeat_count=2
+            )
+        else:
+            # Close - encouraging pattern
+            return VibrationPattern(
+                steps=[
+                    VibrationStep(0.5, 100),
+                    VibrationStep(0.0, 50),
+                    VibrationStep(0.6, 150),
+                ],
+                interval=30,
+                repeat_count=2
+            )
+
+    @staticmethod
     def from_emotion_values(joy: int, fun: int, anger: int, sad: int) -> VibrationPattern:
         """
         Generate pattern from emotion values (0-5 scale)

@@ -90,6 +90,15 @@ vectorsearch_mcp_params = StdioConnectionParams(
     timeout=30.0,
 )
 
+# Game用MCPサーバー
+game_mcp_params = StdioConnectionParams(
+    server_params=StdioServerParameters(
+        command="python",
+        args=["mcp_servers/game_server.py"],
+    ),
+    timeout=30.0,
+)
+
 # MCPToolsetの作成
 emoji_toolset = MCPToolset(
     connection_params=emoji_mcp_params,
@@ -116,6 +125,11 @@ vectorsearch_toolset = MCPToolset(
     tool_filter=["search_similar_interactions", "save_interaction", "get_interaction_stats"],
 )
 
+game_toolset = MCPToolset(
+    connection_params=game_mcp_params,
+    tool_filter=["start_emotion_sync_game", "check_emotion_match", "get_game_status"],
+)
+
 # エージェントの定義
 # すべてのMCPツールセットと連携
 root_agent = Agent(
@@ -129,6 +143,7 @@ root_agent = Agent(
         vibration_toolset,
         voicevox_toolset,
         leapmotion_toolset,
+        game_toolset,
     ],
     input_schema=TouchInput,
 )
