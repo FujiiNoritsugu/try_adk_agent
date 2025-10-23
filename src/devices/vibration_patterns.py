@@ -132,7 +132,61 @@ class EmotionVibrationPatterns:
 
 class VibrationPatternGenerator:
     """Generate dynamic vibration patterns based on emotion parameters"""
-    
+
+    @staticmethod
+    def ticklish_pattern(ticklish_level: int) -> VibrationPattern:
+        """
+        Generate ticklish response pattern based on accumulation level
+
+        Args:
+            ticklish_level: Ticklish accumulation (0-10 scale)
+            0-2: Light response
+            3-5: Medium response (faster, more intense)
+            6-10: Strong response (very fast, escape-like)
+
+        Returns:
+            VibrationPattern for ticklish response
+        """
+        if ticklish_level <= 2:
+            # Light ticklish - gentle flutter
+            return VibrationPattern(
+                steps=[
+                    VibrationStep(0.4, 100),
+                    VibrationStep(0.0, 50),
+                    VibrationStep(0.5, 100),
+                    VibrationStep(0.0, 50),
+                ],
+                interval=30,
+                repeat_count=2
+            )
+        elif ticklish_level <= 5:
+            # Medium ticklish - rapid flutter
+            return VibrationPattern(
+                steps=[
+                    VibrationStep(0.6, 80),
+                    VibrationStep(0.0, 30),
+                    VibrationStep(0.7, 80),
+                    VibrationStep(0.0, 30),
+                    VibrationStep(0.6, 80),
+                ],
+                interval=20,
+                repeat_count=3
+            )
+        else:
+            # Strong ticklish - intense escape pattern
+            return VibrationPattern(
+                steps=[
+                    VibrationStep(0.8, 60),
+                    VibrationStep(0.0, 20),
+                    VibrationStep(1.0, 60),
+                    VibrationStep(0.0, 20),
+                    VibrationStep(0.8, 60),
+                    VibrationStep(0.0, 20),
+                ],
+                interval=10,
+                repeat_count=4
+            )
+
     @staticmethod
     def from_emotion_values(joy: int, fun: int, anger: int, sad: int) -> VibrationPattern:
         """

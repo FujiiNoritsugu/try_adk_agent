@@ -23,6 +23,8 @@ class GenerateVibrationArgs(BaseModel):
     fun: int = Field(description="楽しさの感情値 (0-5)", ge=0, le=5)
     anger: int = Field(description="怒りの感情値 (0-5)", ge=0, le=5)
     sad: int = Field(description="悲しみの感情値 (0-5)", ge=0, le=5)
+    pattern_type: Optional[str] = Field(default=None, description="パターンタイプ ('ticklish' でくすぐったさパターンを使用)")
+    ticklish_level: Optional[int] = Field(default=None, description="くすぐったさレベル (0-10)、pattern_type='ticklish'の時に使用", ge=0, le=10)
 
 
 class ControlVibrationArgs(BaseModel):
@@ -52,7 +54,24 @@ arduino_controller: Optional[ArduinoController] = None
 
 async def generate_vibration_pattern(arguments: GenerateVibrationArgs) -> List[TextContent]:
     """感情パラメータに基づいて振動パターンを生成します"""
-    
+
+    # くすぐったさパターンの場合
+    if arguments.pattern_type == "ticklish" and arguments.ticklish_level is not None:
+        pattern = VibrationPatternGenerator.ticklish_pattern(arguments.ticklish_level)
+
+        result = {
+            "vibration_enabled": True,
+            "pattern": "ticklish",
+            "intensity": 0.7,  # くすぐったさの平均強度
+            "frequency": pattern.repeat_count,
+            "duration": sum(step.duration for step in pattern.steps) / 1000.0,
+            "dominant_emotion": "ticklish",
+            "description": f"くすぐったさレベル{arguments.ticklish_level}の振動パターン",
+            "ticklish_level": arguments.ticklish_level,
+            "vibration_pattern": pattern.to_dict()
+        }
+        return [TextContent(type="text", text=json.dumps(result))]
+
     # VibrationPatternGeneratorを使用してパターンを生成
     pattern = VibrationPatternGenerator.from_emotion_values(
         joy=arguments.joy,
