@@ -239,6 +239,68 @@ class VibrationPatternGenerator:
             )
 
     @staticmethod
+    def rhythm_pattern(difficulty: str = "easy") -> VibrationPattern:
+        """
+        Generate rhythm pattern for rhythm game
+
+        Args:
+            difficulty: Difficulty level ("easy", "normal", "hard")
+
+        Returns:
+            VibrationPattern for rhythm challenge
+        """
+        if difficulty == "easy":
+            # Simple 3-beat pattern
+            return VibrationPattern(
+                steps=[
+                    VibrationStep(0.7, 200),
+                    VibrationStep(0.0, 200),
+                    VibrationStep(0.7, 200),
+                    VibrationStep(0.0, 200),
+                    VibrationStep(0.7, 200),
+                    VibrationStep(0.0, 500),
+                ],
+                interval=0,
+                repeat_count=1
+            )
+        elif difficulty == "normal":
+            # 4-beat pattern with variation
+            return VibrationPattern(
+                steps=[
+                    VibrationStep(0.8, 150),
+                    VibrationStep(0.0, 150),
+                    VibrationStep(0.5, 100),
+                    VibrationStep(0.0, 150),
+                    VibrationStep(0.8, 150),
+                    VibrationStep(0.0, 150),
+                    VibrationStep(0.8, 200),
+                    VibrationStep(0.0, 500),
+                ],
+                interval=0,
+                repeat_count=1
+            )
+        else:  # hard
+            # Complex syncopated pattern
+            return VibrationPattern(
+                steps=[
+                    VibrationStep(0.9, 100),
+                    VibrationStep(0.0, 100),
+                    VibrationStep(0.6, 150),
+                    VibrationStep(0.0, 50),
+                    VibrationStep(0.4, 100),
+                    VibrationStep(0.0, 100),
+                    VibrationStep(0.9, 150),
+                    VibrationStep(0.0, 100),
+                    VibrationStep(0.7, 100),
+                    VibrationStep(0.0, 50),
+                    VibrationStep(0.9, 200),
+                    VibrationStep(0.0, 500),
+                ],
+                interval=0,
+                repeat_count=1
+            )
+
+    @staticmethod
     def from_emotion_values(joy: int, fun: int, anger: int, sad: int) -> VibrationPattern:
         """
         Generate pattern from emotion values (0-5 scale)

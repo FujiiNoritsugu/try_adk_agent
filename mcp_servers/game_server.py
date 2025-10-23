@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""MCP server for emotion sync game management"""
+"""MCP server for emotion sync game and rhythm game management"""
 
 import asyncio
 import json
@@ -11,6 +11,7 @@ from mcp.server import Server
 from mcp.types import TextContent, Tool
 from pydantic import BaseModel, Field
 from datetime import datetime
+import time
 
 # Add parent and src directories to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -37,6 +38,16 @@ class GetGameStatusArgs(BaseModel):
     pass
 
 
+class StartRhythmGameArgs(BaseModel):
+    """Arguments for start_rhythm_game tool"""
+    difficulty: str = Field(description="ゲームの難易度 (easy, normal, hard)", default="easy")
+
+
+class CheckRhythmArgs(BaseModel):
+    """Arguments for check_rhythm tool"""
+    touch_timestamps: List[float] = Field(description="タッチのタイムスタンプリスト（秒単位）")
+
+
 app = Server("game-server")
 
 # Global game state
@@ -44,6 +55,16 @@ game_state = {
     "active": False,
     "target_emotions": {},
     "difficulty": "normal",
+    "start_time": None,
+    "attempts": 0,
+    "best_score": None
+}
+
+# Rhythm game state
+rhythm_state = {
+    "active": False,
+    "difficulty": "easy",
+    "pattern_timestamps": [],
     "start_time": None,
     "attempts": 0,
     "best_score": None
@@ -229,6 +250,176 @@ async def get_game_status(arguments: GetGameStatusArgs) -> List[TextContent]:
     return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
 
 
+async def start_rhythm_game(arguments: StartRhythmGameArgs) -> List[TextContent]:
+    """リズムゲームを開始します"""
+    global rhythm_state
+
+    # Generate rhythm pattern
+    rhythm_pattern = VibrationPatternGenerator.rhythm_pattern(arguments.difficulty)
+
+    # Extract beat timestamps from pattern
+    timestamps = []
+    current_time = 0.0
+    for step in rhythm_pattern.steps:
+        if step.intensity > 0:  # Only count beats (non-zero intensity)
+            timestamps.append(current_time / 1000.0)  # Convert to seconds
+        current_time += step.duration
+
+    # Update rhythm state
+    rhythm_state = {
+        "active": True,
+        "difficulty": arguments.difficulty,
+        "pattern_timestamps": timestamps,
+        "start_time": time.time(),
+        "attempts": 0,
+        "best_score": None
+    }
+
+    result = {
+        "success": True,
+        "message": "リズムゲームを開始しました！",
+        "game_state": {
+            "active": True,
+            "difficulty": arguments.difficulty,
+            "beat_count": len(timestamps)
+        },
+        "instructions": "振動パターンを覚えて、同じリズムでタッチしてください！",
+        "rhythm_pattern": rhythm_pattern.to_dict(),
+        "expected_beats": len(timestamps)
+    }
+
+    return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+
+
+async def check_rhythm(arguments: CheckRhythmArgs) -> List[TextContent]:
+    """ユーザーのタッチタイミングがリズムと一致しているかチェックします"""
+    global rhythm_state
+
+    if not rhythm_state["active"]:
+        return [TextContent(
+            type="text",
+            text=json.dumps({
+                "success": False,
+                "error": "リズムゲームが開始されていません。start_rhythm_gameを実行してください"
+            }, ensure_ascii=False)
+        )]
+
+    rhythm_state["attempts"] += 1
+
+    expected = rhythm_state["pattern_timestamps"]
+    actual = arguments.touch_timestamps
+
+    # Normalize timestamps (relative to first beat)
+    if len(actual) > 0 and len(expected) > 0:
+        actual_normalized = [t - actual[0] for t in actual]
+        expected_normalized = [t - expected[0] for t in expected]
+    else:
+        actual_normalized = actual
+        expected_normalized = expected
+
+    # Calculate timing accuracy
+    score_data = _calculate_rhythm_score(expected_normalized, actual_normalized)
+
+    # Update best score
+    if rhythm_state["best_score"] is None or score_data["score"] > rhythm_state["best_score"]:
+        rhythm_state["best_score"] = score_data["score"]
+
+    # Generate celebration
+    celebration = None
+    if score_data["success_level"] in ["perfect", "good", "close"]:
+        celebration_pattern = VibrationPatternGenerator.celebration_pattern(score_data["success_level"])
+        celebration = celebration_pattern.to_dict()
+
+    # Check if game is won
+    game_won = score_data["success_level"] in ["perfect", "good"]
+    if game_won:
+        rhythm_state["active"] = False
+
+    result = {
+        "success": True,
+        "game_won": game_won,
+        "score": score_data["score"],
+        "success_level": score_data["success_level"],
+        "attempts": rhythm_state["attempts"],
+        "best_score": rhythm_state["best_score"],
+        "timing_errors": score_data["timing_errors"],
+        "avg_error": score_data["avg_error"],
+        "celebration_vibration": celebration,
+        "feedback": _generate_rhythm_feedback(score_data, rhythm_state["attempts"])
+    }
+
+    return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+
+
+def _calculate_rhythm_score(expected: List[float], actual: List[float]) -> Dict[str, Any]:
+    """Calculate rhythm matching score"""
+    # Check beat count match
+    beat_count_diff = abs(len(expected) - len(actual))
+
+    if len(actual) == 0 or len(expected) == 0:
+        return {
+            "score": 0,
+            "success_level": "try_again",
+            "timing_errors": [],
+            "avg_error": 999.0
+        }
+
+    # Calculate timing errors for each beat
+    timing_errors = []
+    matched_count = min(len(expected), len(actual))
+
+    for i in range(matched_count):
+        error = abs(expected[i] - actual[i])
+        timing_errors.append(error)
+
+    # Average timing error
+    avg_error = sum(timing_errors) / len(timing_errors) if timing_errors else 999.0
+
+    # Calculate score (0-100)
+    # Perfect timing: <0.1s error = 100 points
+    # Good timing: <0.2s error = 85+ points
+    # Close timing: <0.3s error = 70+ points
+    if avg_error < 0.1 and beat_count_diff == 0:
+        score = 100
+        success_level = "perfect"
+    elif avg_error < 0.2 and beat_count_diff <= 1:
+        score = max(85, 100 - int(avg_error * 100))
+        success_level = "good"
+    elif avg_error < 0.3 and beat_count_diff <= 2:
+        score = max(70, 100 - int(avg_error * 150))
+        success_level = "close"
+    else:
+        score = max(0, 100 - int(avg_error * 200) - beat_count_diff * 10)
+        success_level = "try_again"
+
+    return {
+        "score": score,
+        "success_level": success_level,
+        "timing_errors": timing_errors,
+        "avg_error": avg_error,
+        "beat_count_diff": beat_count_diff
+    }
+
+
+def _generate_rhythm_feedback(score_data: Dict, attempts: int) -> str:
+    """Generate feedback for rhythm game"""
+    level = score_data["success_level"]
+    score = score_data["score"]
+    avg_error = score_data["avg_error"]
+
+    if level == "perfect":
+        return f"パーフェクト！🎵 {attempts}回目で完璧なリズムです！"
+    elif level == "good":
+        return f"素晴らしい！🎶 スコア{score}点！タイミングばっちり！"
+    elif level == "close":
+        return f"惜しい！もう少し正確に。平均誤差{avg_error:.2f}秒"
+    else:
+        if avg_error > 0.5:
+            return f"リズムをよく聞いて、もう一度トライ！"
+        else:
+            return f"もう少し正確に。平均誤差{avg_error:.2f}秒"
+
+
 def _generate_feedback(score_result: Dict, attempts: int) -> str:
     """Generate encouraging feedback based on score"""
     level = score_result["success_level"]
@@ -269,6 +460,16 @@ async def list_tools() -> List[Tool]:
             name="get_game_status",
             description="現在のゲーム状態（アクティブかどうか、目標感情など）を取得します",
             inputSchema=GetGameStatusArgs.model_json_schema(),
+        ),
+        Tool(
+            name="start_rhythm_game",
+            description="リズムゲームを開始します。振動パターンが生成されます",
+            inputSchema=StartRhythmGameArgs.model_json_schema(),
+        ),
+        Tool(
+            name="check_rhythm",
+            description="ユーザーのタッチタイミングがリズムパターンと一致しているかチェックします",
+            inputSchema=CheckRhythmArgs.model_json_schema(),
         )
     ]
 
@@ -285,6 +486,12 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
     elif name == "get_game_status":
         args = GetGameStatusArgs(**arguments)
         return await get_game_status(args)
+    elif name == "start_rhythm_game":
+        args = StartRhythmGameArgs(**arguments)
+        return await start_rhythm_game(args)
+    elif name == "check_rhythm":
+        args = CheckRhythmArgs(**arguments)
+        return await check_rhythm(args)
     else:
         raise ValueError(f"Unknown tool: {name}")
 

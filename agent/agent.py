@@ -127,7 +127,7 @@ vectorsearch_toolset = MCPToolset(
 
 game_toolset = MCPToolset(
     connection_params=game_mcp_params,
-    tool_filter=["start_emotion_sync_game", "check_emotion_match", "get_game_status"],
+    tool_filter=["start_emotion_sync_game", "check_emotion_match", "get_game_status", "start_rhythm_game", "check_rhythm"],
 )
 
 # エージェントの定義
