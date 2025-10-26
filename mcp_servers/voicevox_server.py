@@ -87,7 +87,7 @@ class VoiceVoxServer:
                 tmp_file_path = tmp_file.name
 
             # シェルスクリプトを使って音声を非同期で再生
-            script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'play_audio.sh')
+            script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'etc', 'play_audio.sh')
             logger.info(f"Script path: {script_path}")
             logger.info(f"Audio file path: {tmp_file_path}")
             logger.info(f"Audio file size: {os.path.getsize(tmp_file_path)} bytes")
