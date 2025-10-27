@@ -122,7 +122,7 @@ leapmotion_toolset = MCPToolset(
 
 vectorsearch_toolset = MCPToolset(
     connection_params=vectorsearch_mcp_params,
-    tool_filter=["search_similar_interactions", "save_interaction", "get_interaction_stats", "check_pattern_memory", "get_intimacy_score"],
+    tool_filter=["search_similar_interactions", "save_interaction", "get_interaction_stats", "check_pattern_memory", "get_intimacy_score", "track_recent_touches", "check_special_gesture"],
 )
 
 game_toolset = MCPToolset(

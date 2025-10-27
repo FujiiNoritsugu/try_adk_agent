@@ -9,6 +9,8 @@ from typing import Any, Dict, List
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 from pydantic import BaseModel, Field
+from datetime import datetime, timedelta
+from collections import deque
 
 # Add parent directories to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,6 +21,43 @@ load_dotenv()
 
 from src.vectorsearch.embedder import EmotionEmbedder, TouchInput, Emotion
 from src.vectorsearch.vector_search_client import VectorSearchClient
+import pickle
+import tempfile
+from pathlib import Path
+
+# Session tracking for recent touches - use persistent file storage
+SESSION_FILE = Path(tempfile.gettempdir()) / "adk_agent_session_touches.pkl"
+
+
+def load_recent_touches():
+    """Load recent touches from file"""
+    try:
+        if SESSION_FILE.exists():
+            with open(SESSION_FILE, "rb") as f:
+                data = pickle.load(f)
+                # Clean old touches (older than 60 seconds)
+                now = datetime.now()
+                cleaned = [t for t in data if (now - t["timestamp"]).total_seconds() < 60]
+                print(f"[DEBUG SESSION] Loaded {len(data)} touches, after cleaning: {len(cleaned)}", file=sys.stderr)
+                return deque(cleaned, maxlen=100)
+    except Exception as e:
+        print(f"[WARNING] Failed to load session file: {e}", file=sys.stderr)
+    print(f"[DEBUG SESSION] No session file found, creating new deque", file=sys.stderr)
+    return deque(maxlen=100)
+
+
+def save_recent_touches(touches):
+    """Save recent touches to file"""
+    try:
+        with open(SESSION_FILE, "wb") as f:
+            pickle.dump(list(touches), f)
+        print(f"[DEBUG SESSION] Saved {len(touches)} touches to {SESSION_FILE}", file=sys.stderr)
+    except Exception as e:
+        print(f"[WARNING] Failed to save session file: {e}", file=sys.stderr)
+
+
+# Initialize from persistent storage (but tools will reload on each call)
+recent_touches = deque(maxlen=100)  # Placeholder, will be loaded by each tool call
 
 
 class SearchSimilarArgs(BaseModel):
@@ -57,6 +96,20 @@ class CheckPatternMemoryArgs(BaseModel):
 class GetIntimacyScoreArgs(BaseModel):
     """Arguments for get_intimacy_score tool"""
     pass
+
+
+class TrackRecentTouchesArgs(BaseModel):
+    """Arguments for track_recent_touches tool"""
+    touched_area: str = Field(description="触られた体の部位")
+    data: float = Field(description="触覚の強度（0-1）", ge=0.0, le=1.0)
+    gesture_type: str = Field(default="", description="ジェスチャータイプ")
+
+
+class CheckSpecialGestureArgs(BaseModel):
+    """Arguments for check_special_gesture tool"""
+    target_area: str = Field(description="検出したい体の部位（例: 胸）")
+    required_count: int = Field(default=3, description="必要なタップ回数", ge=1, le=10)
+    time_window_seconds: float = Field(default=10.0, description="時間窓（秒）", ge=1.0, le=60.0)
 
 
 app = Server("vectorsearch-server")
@@ -320,6 +373,108 @@ async def get_intimacy_score(arguments: GetIntimacyScoreArgs) -> List[TextConten
     return [TextContent(type="text", text=json.dumps(response, ensure_ascii=False))]
 
 
+async def track_recent_touches(arguments: TrackRecentTouchesArgs) -> List[TextContent]:
+    """直近の触覚入力を追跡・記録"""
+
+    global recent_touches
+
+    # Load latest state from file
+    recent_touches = load_recent_touches()
+
+    print(f"[DEBUG] Tracking touch: {arguments.touched_area}", file=sys.stderr)
+
+    # Add current touch to the deque
+    touch_record = {
+        "timestamp": datetime.now(),
+        "touched_area": arguments.touched_area,
+        "data": arguments.data,
+        "gesture_type": arguments.gesture_type if arguments.gesture_type else None
+    }
+    recent_touches.append(touch_record)
+
+    # Save updated state to file
+    save_recent_touches(recent_touches)
+
+    # Count touches in the last 10 seconds
+    now = datetime.now()
+    time_window = timedelta(seconds=10)
+    recent_count = sum(1 for t in recent_touches
+                      if now - t["timestamp"] <= time_window)
+
+    # Count touches for the same area in the last 10 seconds
+    same_area_count = sum(1 for t in recent_touches
+                         if now - t["timestamp"] <= time_window
+                         and t["touched_area"] == arguments.touched_area)
+
+    response = {
+        "success": True,
+        "total_recent_touches": recent_count,
+        "same_area_touches": same_area_count,
+        "touched_area": arguments.touched_area,
+        "recent_touches_list": [
+            {
+                "area": t["touched_area"],
+                "intensity": t["data"],
+                "seconds_ago": (now - t["timestamp"]).total_seconds()
+            }
+            for t in recent_touches
+            if now - t["timestamp"] <= time_window
+        ]
+    }
+
+    print(f"[DEBUG] Tracked: {same_area_count} touches on {arguments.touched_area} (total in memory: {len(recent_touches)})", file=sys.stderr)
+
+    return [TextContent(type="text", text=json.dumps(response, ensure_ascii=False))]
+
+
+async def check_special_gesture(arguments: CheckSpecialGestureArgs) -> List[TextContent]:
+    """特殊ジェスチャーパターンを検出（N回タップなど）"""
+
+    global recent_touches
+
+    # Load latest state from file
+    recent_touches = load_recent_touches()
+
+    print(f"[DEBUG] Checking special gesture: {arguments.target_area} x{arguments.required_count}", file=sys.stderr)
+
+    # Count touches in the specified time window
+    now = datetime.now()
+    time_window = timedelta(seconds=arguments.time_window_seconds)
+
+    matching_touches = [
+        t for t in recent_touches
+        if now - t["timestamp"] <= time_window
+        and t["touched_area"] == arguments.target_area
+    ]
+
+    detected = len(matching_touches) >= arguments.required_count
+
+    response = {
+        "detected": detected,
+        "target_area": arguments.target_area,
+        "required_count": arguments.required_count,
+        "actual_count": len(matching_touches),
+        "time_window_seconds": arguments.time_window_seconds,
+        "message": (
+            f"特殊ジェスチャー検出！{arguments.target_area}を{len(matching_touches)}回タップ"
+            if detected
+            else f"{arguments.target_area}のタップ: {len(matching_touches)}/{arguments.required_count}回"
+        ),
+        "matching_touches": [
+            {
+                "area": t["touched_area"],
+                "intensity": t["data"],
+                "seconds_ago": round((now - t["timestamp"]).total_seconds(), 2)
+            }
+            for t in matching_touches
+        ]
+    }
+
+    print(f"[DEBUG] Special gesture detected={detected} ({len(matching_touches)}/{arguments.required_count}) - total in memory: {len(recent_touches)}", file=sys.stderr)
+
+    return [TextContent(type="text", text=json.dumps(response, ensure_ascii=False))]
+
+
 @app.list_tools()
 async def list_tools() -> List[Tool]:
     """List available tools"""
@@ -348,6 +503,16 @@ async def list_tools() -> List[Tool]:
             name="get_intimacy_score",
             description="現在の親密度スコアを取得します。優しい触れ方の履歴が多いほど親密度が上がります。",
             inputSchema=GetIntimacyScoreArgs.model_json_schema(),
+        ),
+        Tool(
+            name="track_recent_touches",
+            description="直近の触覚入力を追跡・記録します。直近10秒以内の同じ部位へのタッチ回数をカウントします。",
+            inputSchema=TrackRecentTouchesArgs.model_json_schema(),
+        ),
+        Tool(
+            name="check_special_gesture",
+            description="特殊ジェスチャーパターンを検出します（例: 胸を3回タップ）。指定した部位への連続タップがあったか判定します。",
+            inputSchema=CheckSpecialGestureArgs.model_json_schema(),
         )
     ]
 
@@ -369,6 +534,12 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
     elif name == "get_intimacy_score":
         args = GetIntimacyScoreArgs(**arguments)
         return await get_intimacy_score(args)
+    elif name == "track_recent_touches":
+        args = TrackRecentTouchesArgs(**arguments)
+        return await track_recent_touches(args)
+    elif name == "check_special_gesture":
+        args = CheckSpecialGestureArgs(**arguments)
+        return await check_special_gesture(args)
     else:
         raise ValueError(f"Unknown tool: {name}")
 
