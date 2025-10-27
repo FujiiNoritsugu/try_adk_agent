@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict
 import warnings
 import logging
+import os
+import sys
 
 # Suppress experimental feature warnings
 warnings.filterwarnings("ignore", message=".*EXPERIMENTAL.*")
@@ -40,9 +42,20 @@ class TouchInput(BaseModel):
     )
 
 
-# プロンプトファイルの読み込み
-with open("prompt/system_prompt", "r", encoding="utf-8") as f:
+# プロンプトファイルの読み込み（モード別）
+game_mode = os.getenv("GAME_MODE", "normal")  # normal, emotion_game, rhythm_game
+
+if game_mode == "emotion_game":
+    prompt_file = "prompt/system_prompt_game_emotion"
+elif game_mode == "rhythm_game":
+    prompt_file = "prompt/system_prompt_game_rhythm"
+else:
+    prompt_file = "prompt/system_prompt"
+
+with open(prompt_file, "r", encoding="utf-8") as f:
     system_prompt = f.read()
+
+print(f"[INFO] Agent mode: {game_mode}, using prompt: {prompt_file}", file=sys.stderr)
 
 # MCPサーバーの接続設定
 # 絵文字用MCPサーバー
