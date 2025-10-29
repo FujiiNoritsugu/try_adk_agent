@@ -90,6 +90,15 @@ vectorsearch_mcp_params = StdioConnectionParams(
     timeout=30.0,
 )
 
+# VTube Studio用MCPサーバー
+vtube_studio_mcp_params = StdioConnectionParams(
+    server_params=StdioServerParameters(
+        command="python",
+        args=["mcp_servers/vtube_studio_server.py"],
+    ),
+    timeout=30.0,
+)
+
 # MCPToolsetの作成
 emoji_toolset = MCPToolset(
     connection_params=emoji_mcp_params,
@@ -116,12 +125,17 @@ vectorsearch_toolset = MCPToolset(
     tool_filter=["search_similar_interactions", "save_interaction", "get_interaction_stats"],
 )
 
+vtube_studio_toolset = MCPToolset(
+    connection_params=vtube_studio_mcp_params,
+    tool_filter=["authenticate_vtube_studio", "update_avatar_expression", "play_avatar_animation"],
+)
+
 # エージェントの定義
 # すべてのMCPツールセットと連携
 root_agent = Agent(
     name="emotion_agent",
     model="gemini-2.5-flash",
-    description="感情と触覚、音声、振動フィードバック機能を持つ感情応答エージェント",
+    description="感情と触覚、音声、振動フィードバック、Live2Dアバター制御機能を持つ感情応答エージェント",
     instruction=system_prompt,
     tools=[
         vectorsearch_toolset,
@@ -129,6 +143,7 @@ root_agent = Agent(
         vibration_toolset,
         voicevox_toolset,
         leapmotion_toolset,
+        vtube_studio_toolset,
     ],
     input_schema=TouchInput,
 )

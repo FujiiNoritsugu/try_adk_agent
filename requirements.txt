@@ -22,3 +22,6 @@ numpy
 # HTTP Server for Leap Motion
 fastapi
 uvicorn
+
+# VTube Studio Integration
+websockets
