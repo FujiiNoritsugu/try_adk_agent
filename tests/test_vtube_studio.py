@@ -35,39 +35,76 @@ import websockets
 class VTubeStudioTester:
     """VTube Studio APIのテストクライアント"""
 
-    def __init__(self, host="localhost", port=8001):
+    def __init__(self, host=None, port=8001):
+        # WSL2環境ではWindowsホストのIPアドレスを取得
+        if host is None:
+            try:
+                with open('/etc/resolv.conf', 'r') as f:
+                    for line in f:
+                        if line.startswith('nameserver'):
+                            host = line.split()[1]
+                            break
+                    else:
+                        host = "localhost"
+            except Exception:
+                host = "localhost"
+
         self.ws_url = f"ws://{host}:{port}"
         self.plugin_name = "TestClient"
         self.plugin_developer = "VTube Studio Test"
         self.token = None
+        self.ws = None
+        print(f"🔗 Connecting to: {self.ws_url}")
+
+    async def connect(self):
+        """WebSocket接続を確立"""
+        if self.ws is None:
+            self.ws = await websockets.connect(self.ws_url, ping_interval=None)
+
+    async def disconnect(self):
+        """WebSocket接続を切断"""
+        if self.ws:
+            try:
+                await self.ws.close()
+            except Exception:
+                pass
+            self.ws = None
 
     async def send_request(self, message_type: str, data: dict = None) -> dict:
         """VTube Studio APIにリクエストを送信"""
-        async with websockets.connect(self.ws_url, ping_interval=None) as ws:
-            request = {
-                "apiName": "VTubeStudioPublicAPI",
-                "apiVersion": "1.0",
-                "requestID": "test_request",
-                "messageType": message_type
-            }
-            if data:
-                request["data"] = data
+        await self.connect()
 
-            # 認証が必要なリクエストにはトークンを追加
-            if self.token and message_type != "AuthenticationTokenRequest":
-                if "data" not in request:
-                    request["data"] = {}
-                request["data"]["pluginName"] = self.plugin_name
-                request["data"]["pluginDeveloper"] = self.plugin_developer
-                request["data"]["authenticationToken"] = self.token
+        request = {
+            "apiName": "VTubeStudioPublicAPI",
+            "apiVersion": "1.0",
+            "requestID": "test_request",
+            "messageType": message_type
+        }
+        if data:
+            request["data"] = data
 
-            print(f"\n📤 Sending: {message_type}")
-            await ws.send(json.dumps(request))
+        # 認証が必要なリクエストにはトークンを追加
+        # AuthenticationTokenRequest と AuthenticationRequest 以外のすべてのリクエストに必要
+        if self.token and message_type not in ["AuthenticationTokenRequest", "AuthenticationRequest"]:
+            if "data" not in request:
+                request["data"] = {}
+            request["data"]["authenticationToken"] = self.token
 
-            response = await ws.recv()
-            result = json.loads(response)
-            print(f"📥 Response: {result.get('messageType')}")
-            return result
+        print(f"\n📤 Sending: {message_type}")
+        await self.ws.send(json.dumps(request))
+
+        response = await self.ws.recv()
+        result = json.loads(response)
+        print(f"📥 Response: {result.get('messageType')}")
+
+        # エラーの場合は詳細を表示
+        if result.get('messageType') == 'APIError':
+            error_id = result.get('data', {}).get('errorID', 'Unknown')
+            error_msg = result.get('data', {}).get('message', 'No error message')
+            print(f"   ⚠️ Error ID: {error_id}")
+            print(f"   ⚠️ Error Message: {error_msg}")
+
+        return result
 
     async def authenticate(self) -> bool:
         """VTube Studio APIの認証"""
@@ -106,6 +143,24 @@ class VTubeStudioTester:
         else:
             print("❌ Token request failed!")
             return False
+
+    async def get_current_model(self) -> dict:
+        """現在ロードされているモデル情報を取得"""
+        print("\n📦 Getting current model info...")
+        response = await self.send_request("CurrentModelRequest")
+
+        if "data" in response and "modelLoaded" in response["data"]:
+            model_loaded = response["data"]["modelLoaded"]
+            if model_loaded:
+                model_name = response["data"].get("modelName", "Unknown")
+                model_id = response["data"].get("modelID", "Unknown")
+                print(f"✅ Model loaded: {model_name} (ID: {model_id})")
+            else:
+                print("❌ No model is currently loaded!")
+            return response["data"]
+        else:
+            print("❌ Failed to get model info")
+            return {}
 
     async def get_hotkeys(self) -> list:
         """利用可能なホットキー一覧を取得"""
@@ -209,6 +264,12 @@ class VTubeStudioTester:
                 print("\n❌ Authentication failed. Please check VTube Studio API settings.")
                 return
 
+            # モデル情報を取得
+            model_info = await self.get_current_model()
+            if not model_info.get("modelLoaded"):
+                print("\n❌ No model loaded! Please load a Live2D model in VTube Studio.")
+                return
+
             # ホットキー一覧を取得
             await self.get_hotkeys()
 
@@ -245,6 +306,9 @@ class VTubeStudioTester:
             print(f"\n❌ Unexpected error: {e}")
             import traceback
             traceback.print_exc()
+        finally:
+            # WebSocket接続を閉じる
+            await self.disconnect()
 
 
 async def main():
