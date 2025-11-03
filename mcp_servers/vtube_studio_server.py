@@ -38,10 +38,30 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # VTube Studio API設定
-VTUBE_STUDIO_HOST = os.getenv('VTUBE_STUDIO_HOST', 'localhost')
+# WSL2環境ではWindowsホストのIPアドレスを自動検出
+def get_vtube_studio_host():
+    """VTube Studioのホストアドレスを取得（WSL2対応）"""
+    env_host = os.getenv('VTUBE_STUDIO_HOST')
+    if env_host:
+        return env_host
+
+    # WSL2環境: /etc/resolv.confからWindowsホストIPを取得
+    try:
+        with open('/etc/resolv.conf', 'r') as f:
+            for line in f:
+                if line.startswith('nameserver'):
+                    return line.split()[1]
+    except Exception:
+        pass
+
+    return 'localhost'
+
+VTUBE_STUDIO_HOST = get_vtube_studio_host()
 VTUBE_STUDIO_PORT = int(os.getenv('VTUBE_STUDIO_PORT', '8001'))
 PLUGIN_NAME = "EmotionalChatbot"
 PLUGIN_DEVELOPER = "ADK Agent"
+
+logger.info(f"VTube Studio Host: {VTUBE_STUDIO_HOST}:{VTUBE_STUDIO_PORT}")
 
 # 認証トークンファイル
 TOKEN_FILE = os.path.expanduser("~/.vtube_studio_token")
@@ -53,6 +73,8 @@ class VTubeStudioClient:
     def __init__(self):
         self.ws_url = f"ws://{VTUBE_STUDIO_HOST}:{VTUBE_STUDIO_PORT}"
         self.token = self._load_token()
+        self.ws = None  # 永続的なWebSocket接続
+        self.authenticated = False  # 認証状態
 
     def _load_token(self) -> str | None:
         """保存された認証トークンを読み込み"""
@@ -67,66 +89,143 @@ class VTubeStudioClient:
             f.write(token)
         logger.info(f"Token saved to {TOKEN_FILE}")
 
-    async def _send_request(self, message_type: str, data: dict = None) -> dict:
+    async def connect(self):
+        """WebSocket接続を確立"""
+        if self.ws is None:
+            logger.info(f"Connecting to VTube Studio at {self.ws_url}...")
+            self.ws = await websockets.connect(self.ws_url, ping_interval=None)
+            self.authenticated = False  # 新しい接続では再認証が必要
+
+    async def disconnect(self):
+        """WebSocket接続を切断"""
+        if self.ws:
+            try:
+                await self.ws.close()
+            except Exception:
+                pass
+        self.ws = None
+        self.authenticated = False
+
+    async def _send_request(self, message_type: str, data: dict = None, retry_auth: bool = True) -> dict:
         """VTube Studio APIにリクエストを送信"""
         try:
-            async with websockets.connect(self.ws_url, ping_interval=None) as ws:
-                request = {
-                    "apiName": "VTubeStudioPublicAPI",
-                    "apiVersion": "1.0",
-                    "requestID": "emotional_chatbot_request",
-                    "messageType": message_type
-                }
-                if data:
-                    request["data"] = data
+            # WebSocket接続を確立
+            await self.connect()
 
-                # 認証が必要なリクエストにはトークンを追加
-                if self.token and message_type != "AuthenticationTokenRequest":
-                    if "data" not in request:
-                        request["data"] = {}
-                    request["data"]["pluginName"] = PLUGIN_NAME
-                    request["data"]["pluginDeveloper"] = PLUGIN_DEVELOPER
-                    request["data"]["authenticationToken"] = self.token
+            # 認証が必要なリクエストで、まだ認証されていない場合は先に認証
+            if message_type not in ["AuthenticationTokenRequest", "AuthenticationRequest"] and not self.authenticated:
+                logger.info("Not authenticated yet. Authenticating first...")
+                auth_result = await self.authenticate()
+                if not auth_result.get("data", {}).get("authenticated"):
+                    return {"error": "Authentication required but failed"}
 
-                logger.info(f"Sending request: {message_type}")
-                await ws.send(json.dumps(request))
+            request = {
+                "apiName": "VTubeStudioPublicAPI",
+                "apiVersion": "1.0",
+                "requestID": "emotional_chatbot_request",
+                "messageType": message_type
+            }
+            if data:
+                request["data"] = data
 
-                response = await ws.recv()
-                result = json.loads(response)
-                logger.info(f"Received response: {result.get('messageType')}")
-                return result
+            # 認証が必要なリクエストにはトークンを追加
+            # AuthenticationTokenRequest と AuthenticationRequest 以外のすべてのリクエストに必要
+            if self.token and message_type not in ["AuthenticationTokenRequest", "AuthenticationRequest"]:
+                if "data" not in request:
+                    request["data"] = {}
+                request["data"]["authenticationToken"] = self.token
+
+            logger.info(f"Sending request: {message_type}")
+            await self.ws.send(json.dumps(request))
+
+            response = await self.ws.recv()
+            result = json.loads(response)
+            logger.info(f"Received response: {result.get('messageType')}")
+
+            # エラーの詳細をログに記録
+            if result.get('messageType') == 'APIError':
+                error_id = result.get('data', {}).get('errorID', 'Unknown')
+                error_msg = result.get('data', {}).get('message', 'No error message')
+                logger.error(f"VTube Studio API Error - ID: {error_id}, Message: {error_msg}")
+
+                # Error ID 8: 認証エラー → 再接続して再認証
+                if error_id == 8 and retry_auth:
+                    logger.info("Authentication error detected. Reconnecting and re-authenticating...")
+                    await self.disconnect()
+                    await self.connect()
+                    auth_result = await self.authenticate()
+                    if auth_result.get("data", {}).get("authenticated"):
+                        logger.info("Re-authentication successful. Retrying original request...")
+                        return await self._send_request(message_type, data, retry_auth=False)
+                    else:
+                        logger.error("Re-authentication failed.")
+
+            return result
         except Exception as e:
             logger.error(f"VTube Studio API error: {e}")
+            # 接続エラーの場合は再接続を試みる
+            await self.disconnect()
             return {"error": str(e)}
 
     async def authenticate(self) -> dict:
-        """VTube Studio APIの認証"""
+        """VTube Studio APIの認証（現在のWebSocket接続内で実行）"""
+        logger.info("Starting VTube Studio authentication...")
+
+        # WebSocket接続を確立
+        await self.connect()
+
         # トークンリクエスト
-        response = await self._send_request(
-            "AuthenticationTokenRequest",
-            {
+        request = {
+            "apiName": "VTubeStudioPublicAPI",
+            "apiVersion": "1.0",
+            "requestID": "auth_token_request",
+            "messageType": "AuthenticationTokenRequest",
+            "data": {
                 "pluginName": PLUGIN_NAME,
                 "pluginDeveloper": PLUGIN_DEVELOPER,
                 "pluginIcon": ""
             }
-        )
+        }
+        logger.info("Sending request: AuthenticationTokenRequest")
+        await self.ws.send(json.dumps(request))
+        response = await self.ws.recv()
+        token_response = json.loads(response)
+        logger.info(f"Received response: {token_response.get('messageType')}")
 
-        if "data" in response and "authenticationToken" in response["data"]:
-            self.token = response["data"]["authenticationToken"]
-            self._save_token(self.token)
+        if "data" not in token_response or "authenticationToken" not in token_response["data"]:
+            logger.error("Token request failed!")
+            return token_response
 
-            # 認証
-            auth_response = await self._send_request(
-                "AuthenticationRequest",
-                {
-                    "pluginName": PLUGIN_NAME,
-                    "pluginDeveloper": PLUGIN_DEVELOPER,
-                    "authenticationToken": self.token
-                }
-            )
-            return auth_response
+        self.token = token_response["data"]["authenticationToken"]
+        self._save_token(self.token)
+        logger.info(f"Token received: {self.token[:20]}...")
+
+        # 認証リクエスト（同じWebSocket接続内で）
+        auth_request = {
+            "apiName": "VTubeStudioPublicAPI",
+            "apiVersion": "1.0",
+            "requestID": "auth_request",
+            "messageType": "AuthenticationRequest",
+            "data": {
+                "pluginName": PLUGIN_NAME,
+                "pluginDeveloper": PLUGIN_DEVELOPER,
+                "authenticationToken": self.token
+            }
+        }
+        logger.info("Sending request: AuthenticationRequest")
+        await self.ws.send(json.dumps(auth_request))
+        auth_response_raw = await self.ws.recv()
+        auth_response = json.loads(auth_response_raw)
+        logger.info(f"Received response: {auth_response.get('messageType')}")
+
+        if auth_response.get("data", {}).get("authenticated"):
+            logger.info("Authentication successful!")
+            self.authenticated = True
         else:
-            return response
+            logger.error("Authentication failed!")
+            self.authenticated = False
+
+        return auth_response
 
     async def trigger_hotkey(self, hotkey_name: str) -> dict:
         """ホットキーをトリガーして表情やアニメーションを変更"""
@@ -227,28 +326,22 @@ async def list_tools() -> list[Tool]:
             name="play_avatar_animation",
             description=(
                 "特定のアニメーションを再生します。"
-                "例: 'ticklish'（くすぐったい）、'celebration'（ゲーム成功の喜び）、"
-                "'rhythm'（リズムに合わせた動き）など。"
-                "これらのアニメーションはVTube Studioのホットキーとして設定されている必要があります。"
+                "利用可能なアニメーション: 'shake'（振る/揺れる）、'shock'（ショック/驚き）など。"
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "animation_name": {
                         "type": "string",
-                        "description": "再生するアニメーション名（ホットキー名）",
+                        "description": "再生するアニメーション名",
                         "enum": [
-                            "ticklish",        # くすぐったい反応
-                            "celebration",     # 祝福・喜び
-                            "rhythm_move",     # リズムゲーム用
-                            "shy",             # 恥ずかしい
-                            "surprise",        # 驚き
-                            "neutral"          # ニュートラル表情
+                            "shake",      # 振る/揺れる
+                            "shock"       # ショック/驚き
                         ]
                     },
                     "intensity": {
                         "type": "number",
-                        "description": "アニメーションの強度（0-10）。くすぐったさレベルなどに使用。",
+                        "description": "アニメーションの強度（0-10）",
                         "minimum": 0,
                         "maximum": 10
                     }
@@ -291,15 +384,21 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             dominant_emotion = max(emotions, key=emotions.get)
             max_value = emotions[dominant_emotion]
 
-            # 表情ホットキーのマッピング
+            # 既存のVTube Studioホットキーにマッピング
+            # 利用可能: ['Heart Eyes', 'Eyes Cry', 'Angry Sign', 'Shock Sign', 'Remove Expressions', 'Anim Shake']
             hotkey_map = {
-                "joy": "happy" if max_value >= 3 else "smile",
-                "fun": "excited" if max_value >= 3 else "smile",
-                "anger": "angry" if max_value >= 3 else "annoyed",
-                "sad": "sad" if max_value >= 3 else "neutral"
+                "joy": "Heart Eyes",      # 喜び → ハートの目
+                "fun": "Heart Eyes",      # 楽しさ → ハートの目
+                "anger": "Angry Sign",    # 怒り → 怒りサイン
+                "sad": "Eyes Cry"         # 悲しみ → 泣く目
             }
 
-            hotkey_name = hotkey_map.get(dominant_emotion, "neutral")
+            # 感情値が低い場合は中立表情（Remove Expressions）
+            if max_value < 1:
+                hotkey_name = "Remove Expressions"
+            else:
+                hotkey_name = hotkey_map.get(dominant_emotion, "Remove Expressions")
+
             result = await client.trigger_hotkey(hotkey_name)
 
             if "error" in result:
@@ -319,12 +418,13 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             animation_name = arguments["animation_name"]
             intensity = arguments.get("intensity", 5)
 
-            # 強度に応じてホットキー名を調整
-            if animation_name == "ticklish" and intensity > 5:
-                hotkey_name = "ticklish_strong"
-            else:
-                hotkey_name = animation_name
+            # 既存のVTube Studioホットキーにマッピング
+            animation_map = {
+                "shake": "Anim Shake",      # 振る/揺れる
+                "shock": "Shock Sign"       # ショック/驚き
+            }
 
+            hotkey_name = animation_map.get(animation_name, "Anim Shake")
             result = await client.trigger_hotkey(hotkey_name)
 
             if "error" in result:

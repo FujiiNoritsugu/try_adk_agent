@@ -131,18 +131,18 @@ vtube_studio_toolset = MCPToolset(
 )
 
 # エージェントの定義
-# すべてのMCPツールセットと連携
+# VTube Studio連携のみ有効化
 root_agent = Agent(
     name="emotion_agent",
     model="gemini-2.5-flash",
-    description="感情と触覚、音声、振動フィードバック、Live2Dアバター制御機能を持つ感情応答エージェント",
+    description="感情とLive2Dアバター制御機能を持つ感情応答エージェント",
     instruction=system_prompt,
     tools=[
-        vectorsearch_toolset,
+        # vectorsearch_toolset,  # 無効化
         emoji_toolset,
-        vibration_toolset,
-        voicevox_toolset,
-        leapmotion_toolset,
+        # vibration_toolset,  # 無効化
+        # voicevox_toolset,  # 無効化
+        # leapmotion_toolset,  # 無効化
         vtube_studio_toolset,
     ],
     input_schema=TouchInput,
