@@ -273,6 +273,106 @@ class VTubeStudioClient:
         )
         return response
 
+    async def sync_lipsync_with_audio(self, audio_file_path: str) -> dict:
+        """
+        音声ファイルに合わせてリップシンクを実行
+
+        WAVファイルの音量を解析して、MouthOpenパラメータをリアルタイムで制御
+        """
+        try:
+            import wave
+            import numpy as np
+            import time
+
+            # WAVファイルを開く
+            with wave.open(audio_file_path, 'rb') as wav_file:
+                # WAVファイルのパラメータを取得
+                framerate = wav_file.getframerate()
+                n_frames = wav_file.getnframes()
+                audio_data = wav_file.readframes(n_frames)
+
+                # バイトデータをnumpy配列に変換
+                if wav_file.getsampwidth() == 2:  # 16-bit audio
+                    audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                else:
+                    logger.warning(f"Unsupported sample width: {wav_file.getsampwidth()}")
+                    return {"success": False, "error": "Unsupported audio format"}
+
+                # ステレオの場合はモノラルに変換
+                if wav_file.getnchannels() == 2:
+                    audio_array = audio_array[::2]  # 左チャンネルのみ使用
+
+                # 音量を正規化（0-1）
+                max_amplitude = np.max(np.abs(audio_array))
+                if max_amplitude > 0:
+                    normalized_audio = np.abs(audio_array) / max_amplitude
+                else:
+                    normalized_audio = np.zeros_like(audio_array)
+
+                # フレームレートに基づいてサンプリング間隔を決定（30fps想定）
+                fps = 30
+                samples_per_frame = framerate // fps
+
+                logger.info(f"Starting lipsync: {n_frames} frames at {framerate}Hz, {fps}fps")
+
+                # リップシンクを実行
+                start_time = time.time()
+                for i in range(0, len(normalized_audio), samples_per_frame):
+                    # 現在のフレームの音量を計算（RMS）
+                    frame_samples = normalized_audio[i:i+samples_per_frame]
+                    if len(frame_samples) > 0:
+                        rms = np.sqrt(np.mean(frame_samples ** 2))
+                        mouth_open_value = min(1.0, rms * 2.0)  # 音量を口の開き具合に変換
+                    else:
+                        mouth_open_value = 0.0
+
+                    # MouthOpenパラメータを送信
+                    await self._send_request(
+                        "InjectParameterDataRequest",
+                        {
+                            "parameterValues": [
+                                {
+                                    "id": "MouthOpen",
+                                    "value": mouth_open_value
+                                }
+                            ]
+                        }
+                    )
+
+                    # フレームレートに合わせて待機
+                    elapsed = time.time() - start_time
+                    expected_time = i / framerate
+                    sleep_time = expected_time - elapsed
+                    if sleep_time > 0:
+                        await asyncio.sleep(sleep_time)
+
+                # 最後に口を閉じる
+                await self._send_request(
+                    "InjectParameterDataRequest",
+                    {
+                        "parameterValues": [
+                            {
+                                "id": "MouthOpen",
+                                "value": 0.0
+                            }
+                        ]
+                    }
+                )
+
+                logger.info("Lipsync completed")
+                return {
+                    "success": True,
+                    "duration": time.time() - start_time,
+                    "frames": len(normalized_audio) // samples_per_frame
+                }
+
+        except Exception as e:
+            logger.error(f"Lipsync error: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
 
 # MCPサーバー初期化
 app = Server("vtube-studio-server")
@@ -298,6 +398,7 @@ async def list_tools() -> list[Tool]:
                 "感情値に基づいてアバターの表情を更新します。"
                 "joy（喜び）が高い場合は笑顔、anger（怒り）が高い場合は怒り顔など、"
                 "感情値の組み合わせに応じて適切な表情ホットキーをトリガーします。"
+                "オプションでreset_after_secondsを指定すると、指定秒数後に自動的に中立表情に戻ります。"
             ),
             inputSchema={
                 "type": "object",
@@ -317,6 +418,10 @@ async def list_tools() -> list[Tool]:
                     "sad": {
                         "type": "number",
                         "description": "悲しみの感情値（0-5）"
+                    },
+                    "reset_after_seconds": {
+                        "type": "number",
+                        "description": "指定秒数後に表情を中立に戻す（オプション、0より大きい値を指定）"
                     }
                 },
                 "required": ["joy", "fun", "anger", "sad"]
@@ -348,6 +453,24 @@ async def list_tools() -> list[Tool]:
                 },
                 "required": ["animation_name"]
             }
+        ),
+        Tool(
+            name="sync_lipsync_with_audio",
+            description=(
+                "音声ファイルに合わせてアバターのリップシンクを実行します。"
+                "WAVファイルの音量を解析して、MouthOpenパラメータをリアルタイムで制御します。"
+                "VOICEVOXのtext_to_speechツールが返すaudio_fileパスを渡してください。"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "audio_file_path": {
+                        "type": "string",
+                        "description": "リップシンクする音声ファイルのパス（WAV形式）"
+                    }
+                },
+                "required": ["audio_file_path"]
+            }
         )
     ]
 
@@ -373,6 +496,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             fun = arguments["fun"]
             anger = arguments["anger"]
             sad = arguments["sad"]
+            reset_after_seconds = arguments.get("reset_after_seconds")
 
             # 最も高い感情値に基づいてホットキーを選択
             emotions = {
@@ -385,12 +509,12 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             max_value = emotions[dominant_emotion]
 
             # 既存のVTube Studioホットキーにマッピング
-            # 利用可能: ['Heart Eyes', 'Eyes Cry', 'Angry Sign', 'Shock Sign', 'Remove Expressions', 'Anim Shake']
+            # VTube Studioのホットキー名に合わせる
             hotkey_map = {
-                "joy": "Heart Eyes",      # 喜び → ハートの目
-                "fun": "Heart Eyes",      # 楽しさ → ハートの目
-                "anger": "Angry Sign",    # 怒り → 怒りサイン
-                "sad": "Eyes Cry"         # 悲しみ → 泣く目
+                "joy": "Joy",             # 喜び
+                "fun": "Pleasure",        # 楽しさ → 快感
+                "anger": "Anger",         # 怒り
+                "sad": "Sadness"          # 悲しみ
             }
 
             # 感情値が低い場合は中立表情（Remove Expressions）
@@ -408,11 +532,28 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                          f"Make sure hotkey '{hotkey_name}' exists in VTube Studio."
                 )]
 
-            return [TextContent(
-                type="text",
-                text=f"Avatar expression updated to '{hotkey_name}' "
-                     f"(dominant emotion: {dominant_emotion}={max_value:.1f})"
-            )]
+            # 自動リセットが指定されている場合、遅延タスクを作成
+            if reset_after_seconds and reset_after_seconds > 0:
+                async def reset_expression():
+                    await asyncio.sleep(reset_after_seconds)
+                    logger.info(f"Resetting expression after {reset_after_seconds}s...")
+                    await client.trigger_hotkey("Remove Expressions")
+
+                # バックグラウンドタスクとして実行
+                asyncio.create_task(reset_expression())
+
+                return [TextContent(
+                    type="text",
+                    text=f"Avatar expression updated to '{hotkey_name}' "
+                         f"(dominant emotion: {dominant_emotion}={max_value:.1f}). "
+                         f"Will reset to neutral after {reset_after_seconds}s."
+                )]
+            else:
+                return [TextContent(
+                    type="text",
+                    text=f"Avatar expression updated to '{hotkey_name}' "
+                         f"(dominant emotion: {dominant_emotion}={max_value:.1f})"
+                )]
 
         elif name == "play_avatar_animation":
             animation_name = arguments["animation_name"]
@@ -437,6 +578,22 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             return [TextContent(
                 type="text",
                 text=f"Animation '{animation_name}' played (intensity: {intensity})"
+            )]
+
+        elif name == "sync_lipsync_with_audio":
+            audio_file_path = arguments["audio_file_path"]
+
+            result = await client.sync_lipsync_with_audio(audio_file_path)
+
+            if "error" in result or not result.get("success"):
+                return [TextContent(
+                    type="text",
+                    text=f"Lipsync failed: {result.get('error', 'Unknown error')}"
+                )]
+
+            return [TextContent(
+                type="text",
+                text=f"Lipsync completed successfully. Duration: {result['duration']:.2f}s, Frames: {result['frames']}"
             )]
 
         else:

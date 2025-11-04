@@ -113,7 +113,8 @@ class VoiceVoxServer:
             return {
                 "success": True,
                 "text": text,
-                "speaker_id": speaker_id
+                "speaker_id": speaker_id,
+                "audio_file": tmp_file_path  # WAVファイルパスを返す
             }
 
         except Exception as e:

@@ -127,11 +127,11 @@ vectorsearch_toolset = MCPToolset(
 
 vtube_studio_toolset = MCPToolset(
     connection_params=vtube_studio_mcp_params,
-    tool_filter=["authenticate_vtube_studio", "update_avatar_expression", "play_avatar_animation"],
+    tool_filter=["authenticate_vtube_studio", "update_avatar_expression", "play_avatar_animation", "sync_lipsync_with_audio"],
 )
 
 # エージェントの定義
-# VTube Studio連携のみ有効化
+# VTube Studio連携とVOICEVOXを有効化
 root_agent = Agent(
     name="emotion_agent",
     model="gemini-2.5-flash",
@@ -141,7 +141,7 @@ root_agent = Agent(
         # vectorsearch_toolset,  # 無効化
         emoji_toolset,
         # vibration_toolset,  # 無効化
-        # voicevox_toolset,  # 無効化
+        voicevox_toolset,  # リップシンクのために有効化
         # leapmotion_toolset,  # 無効化
         vtube_studio_toolset,
     ],
