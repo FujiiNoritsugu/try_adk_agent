@@ -360,6 +360,15 @@ class VTubeStudioClient:
                 )
 
                 logger.info("Lipsync completed")
+
+                # リップシンク完了後に音声ファイルを削除（クリーンアップ）
+                try:
+                    if os.path.exists(audio_file_path):
+                        os.remove(audio_file_path)
+                        logger.info(f"Audio file deleted: {audio_file_path}")
+                except Exception as delete_error:
+                    logger.warning(f"Failed to delete audio file: {delete_error}")
+
                 return {
                     "success": True,
                     "duration": time.time() - start_time,
@@ -498,18 +507,15 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             sad = arguments["sad"]
             reset_after_seconds = arguments.get("reset_after_seconds")
 
-            # 最も高い感情値に基づいてホットキーを選択
+            # 感情値を辞書にまとめる
             emotions = {
                 "joy": joy,
                 "fun": fun,
                 "anger": anger,
                 "sad": sad
             }
-            dominant_emotion = max(emotions, key=emotions.get)
-            max_value = emotions[dominant_emotion]
 
             # 既存のVTube Studioホットキーにマッピング
-            # VTube Studioのホットキー名に合わせる
             hotkey_map = {
                 "joy": "Joy",             # 喜び
                 "fun": "Pleasure",        # 楽しさ → 快感
@@ -517,20 +523,35 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 "sad": "Sadness"          # 悲しみ
             }
 
-            # 感情値が低い場合は中立表情（Remove Expressions）
-            if max_value < 1:
-                hotkey_name = "Remove Expressions"
+            # 閾値以上の感情をすべて適用（優先順位: anger > sad > joy > fun）
+            triggered_emotions = []
+            applied_hotkeys = []
+
+            # 感情の優先順位（強い感情を優先）
+            priority_order = ["anger", "sad", "joy", "fun"]
+
+            for emotion_name in priority_order:
+                emotion_value = emotions[emotion_name]
+                if emotion_value >= 0.5:  # 閾値: 0.5以上
+                    hotkey_name = hotkey_map[emotion_name]
+                    result = await client.trigger_hotkey(hotkey_name)
+
+                    if "error" not in result:
+                        triggered_emotions.append(f"{emotion_name}={emotion_value:.1f}")
+                        applied_hotkeys.append(hotkey_name)
+                        logger.info(f"Triggered hotkey '{hotkey_name}' for {emotion_name}={emotion_value:.1f}")
+
+            # どの感情も閾値を超えていない場合は中立表情
+            if not triggered_emotions:
+                result = await client.trigger_hotkey("Remove Expressions")
+                if "error" in result:
+                    return [TextContent(
+                        type="text",
+                        text=f"Expression update failed: {result['error']}"
+                    )]
+                response_text = "Avatar expression set to neutral (all emotions below threshold)"
             else:
-                hotkey_name = hotkey_map.get(dominant_emotion, "Remove Expressions")
-
-            result = await client.trigger_hotkey(hotkey_name)
-
-            if "error" in result:
-                return [TextContent(
-                    type="text",
-                    text=f"Expression update failed: {result['error']}. "
-                         f"Make sure hotkey '{hotkey_name}' exists in VTube Studio."
-                )]
+                response_text = f"Avatar expressions applied: {', '.join(applied_hotkeys)} ({', '.join(triggered_emotions)})"
 
             # 自動リセットが指定されている場合、遅延タスクを作成
             if reset_after_seconds and reset_after_seconds > 0:
@@ -541,19 +562,12 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
 
                 # バックグラウンドタスクとして実行
                 asyncio.create_task(reset_expression())
+                response_text += f" Will reset to neutral after {reset_after_seconds}s."
 
-                return [TextContent(
-                    type="text",
-                    text=f"Avatar expression updated to '{hotkey_name}' "
-                         f"(dominant emotion: {dominant_emotion}={max_value:.1f}). "
-                         f"Will reset to neutral after {reset_after_seconds}s."
-                )]
-            else:
-                return [TextContent(
-                    type="text",
-                    text=f"Avatar expression updated to '{hotkey_name}' "
-                         f"(dominant emotion: {dominant_emotion}={max_value:.1f})"
-                )]
+            return [TextContent(
+                type="text",
+                text=response_text
+            )]
 
         elif name == "play_avatar_animation":
             animation_name = arguments["animation_name"]

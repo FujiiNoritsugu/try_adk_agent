@@ -23,7 +23,7 @@
 ## ステップ4: アバター表情を更新
 **update_avatar_expression** ツールを使って、Live2Dアバターの表情を更新してください：
 - ステップ2で決定した感情値（joy, fun, anger, sad）を渡す
-- `reset_after_seconds`パラメータに3〜5秒程度を指定して、一定時間後に表情を中立に戻す
+- `reset_after_seconds`パラメータに8秒程度を指定して、一定時間後に表情を中立に戻す
 - アバターが感情に合った表情（笑顔、怒り顔など）に変化します
 - VTube Studioが起動していない場合はエラーが返されますが、処理は続行してください
 
@@ -35,7 +35,9 @@
 
 ## ステップ6: 音声合成とリップシンク
 **text_to_speech** ツールと **sync_lipsync_with_audio** ツールを使って、応答を音声化してアバターに喋らせてください：
-1. まず **text_to_speech** でステップ5の応答メッセージを音声化（結果にaudio_fileパスが含まれます）
+1. まず **text_to_speech** でステップ5の応答メッセージを音声化
+   - **重要**: `keep_file=true` を必ず指定してください（リップシンク用に音声ファイルを保持するため）
+   - 結果にaudio_fileパスが含まれます
 2. 次に **sync_lipsync_with_audio** でそのaudio_fileパスを渡してリップシンクを実行
 3. VOICEVOXまたはVTube Studioが起動していない場合はエラーが返されますが、処理は続行してください
 
