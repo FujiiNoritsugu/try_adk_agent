@@ -175,8 +175,9 @@ class VibrationPatternGenerator:
             emotion_map.get(emotion_name, EmotionType.NEUTRAL)
         )
         
-        # Scale intensity based on emotion value (1-5 → 0.6-1.0)
-        intensity_scale = 0.6 + (emotion_value / 5) * 0.4
+        # Scale intensity based on emotion value (1-5 → 0.8-1.0)
+        # 常に強めの振動にする
+        intensity_scale = 0.8 + (emotion_value / 5) * 0.2
         
         # Adjust pattern intensity
         adjusted_steps = []

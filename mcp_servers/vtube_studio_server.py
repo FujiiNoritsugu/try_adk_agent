@@ -534,12 +534,15 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 emotion_value = emotions[emotion_name]
                 if emotion_value >= 0.5:  # 閾値: 0.5以上
                     hotkey_name = hotkey_map[emotion_name]
+                    logger.info(f"Attempting to trigger hotkey '{hotkey_name}' for {emotion_name}={emotion_value:.1f}")
                     result = await client.trigger_hotkey(hotkey_name)
 
                     if "error" not in result:
                         triggered_emotions.append(f"{emotion_name}={emotion_value:.1f}")
                         applied_hotkeys.append(hotkey_name)
-                        logger.info(f"Triggered hotkey '{hotkey_name}' for {emotion_name}={emotion_value:.1f}")
+                        logger.info(f"Successfully triggered hotkey '{hotkey_name}' for {emotion_name}={emotion_value:.1f}")
+                    else:
+                        logger.error(f"Failed to trigger hotkey '{hotkey_name}': {result.get('error')}")
 
             # どの感情も閾値を超えていない場合は中立表情
             if not triggered_emotions:

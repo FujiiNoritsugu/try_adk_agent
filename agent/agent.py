@@ -140,9 +140,9 @@ root_agent = Agent(
     tools=[
         # vectorsearch_toolset,  # 無効化
         emoji_toolset,
-        # vibration_toolset,  # 無効化
+        vibration_toolset,  # 有効化
         voicevox_toolset,  # リップシンクのために有効化
-        # leapmotion_toolset,  # 無効化
+        leapmotion_toolset,  # 有効化
         vtube_studio_toolset,
     ],
     input_schema=TouchInput,
